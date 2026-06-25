@@ -1,0 +1,308 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #7B1E1E;
+  --color-primary-dark: #5E1515;
+  --color-primary-accent: #A52A2A;
+  
+  --color-bg-page: #FAF8F4;
+  --color-bg-card: #FFFFFF;
+  
+  --color-border: #E8E1D9;
+  
+  --color-text-primary: #2F2F2F;
+  --color-text-muted: #6B6460;
+  --color-text-hint: #9E9590;
+  
+  --color-success: #1A7A4A;
+  --color-warning: #C47A00;
+  --color-danger: #B02020;
+  --color-danger-custom: #B02020;
+  
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --radius-input: 8px;
+  --radius-badge: 20px;
+  
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-popup: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+:root {
+  --primary:        #7B1E1E;
+  --primary-dark:   #5E1515;
+  --primary-accent: #A52A2A;
+  --bg-page:        #FAF8F4;
+  --bg-card:        #FFFFFF;
+  --border:         #E8E1D9;
+  --text-primary:   #2F2F2F;
+  --text-muted:     #6B6460;
+  --text-hint:      #9E9590;
+  --success:        #1A7A4A;
+  --warning:        #C47A00;
+  --danger:         #B02020;
+}
+
+body, input, select, textarea, button, label, span, p, h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', sans-serif;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 400;
+  color: var(--text-primary);
+  background-color: var(--bg-page);
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Desktop POS layout - no scrolling on outer shell */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typography Scale classes */
+.page-title {
+  font-size: 36px !important;
+  font-weight: 800 !important;
+  color: #1A1A1A !important;
+  letter-spacing: -0.8px !important;
+  line-height: 1.2 !important;
+}
+
+.page-subtitle {
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  color: #6B6460 !important;
+}
+
+.section-heading {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: #2F2F2F !important;
+}
+
+.card-metric-number {
+  font-size: 36px !important;
+  font-weight: 700 !important;
+  color: #1A1A1A !important;
+  letter-spacing: -1px !important;
+}
+
+.card-metric-label {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #6B6460 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.custom-table th {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #6B6460 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.6px !important;
+  padding: 12px 16px !important;
+}
+
+.custom-table td {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: #2F2F2F !important;
+  padding: 14px 16px !important;
+}
+
+.primary-row-text {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: #1A1A1A !important;
+}
+
+.sidebar-nav-label {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+
+.sidebar-divider-label {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: rgba(255,255,255,0.4) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+}
+
+.btn-custom {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.2px !important;
+  padding: 10px 20px !important;
+  height: 38px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.btn-custom-lg {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.2px !important;
+  padding: 12px 28px !important;
+  height: 42px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.input-label-custom {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #2F2F2F !important;
+  margin-bottom: 6px !important;
+  display: block !important;
+}
+
+.badge-text-custom {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+}
+
+.empty-title-custom {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #2F2F2F !important;
+}
+
+.empty-subtitle-custom {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: #9E9590 !important;
+}
+
+/* Page Spacing wrapper */
+.page-container {
+  padding-top: 32px;
+  padding-left: 32px;
+  padding-right: 32px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.section-gap {
+  margin-bottom: 32px;
+}
+
+/* Custom Table Row Minimum Height */
+.custom-table tr {
+  min-height: 56px;
+}
+.custom-table tbody tr {
+  height: 56px;
+}
+
+/* Input custom styles matching Poppins scale */
+input::placeholder {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: #9E9590 !important;
+}
+
+input {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: #1A1A1A !important;
+}
+
+
+/* Inputs styling */
+input, select, textarea {
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background-color: #FFFFFF;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: all 150ms ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(123, 30, 30, 0.12);
+}
+
+/* Custom compact scrollbar for scrollable areas */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #E8E1D9;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #C4B8B0;
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    font-size: 12px !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  /* Reset layout for print */
+  #root {
+    display: block !important;
+    height: auto !important;
+    width: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  /* Print target visibility isolation */
+  body * {
+    visibility: hidden;
+  }
+  .print-area, .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  .page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
