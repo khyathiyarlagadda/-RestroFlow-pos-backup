@@ -11,11 +11,20 @@ export const SettingsScreen: React.FC = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    const handleSettingsUpdate = () => {
+      setSettings(storage.getSettings());
+    };
+    window.addEventListener('settingsUpdated', handleSettingsUpdate);
+
     setSettings(storage.getSettings());
     const auth = storage.getAuth();
     if (auth && (auth.role === 'Administrator' || auth.role === 'Restaurant Owner')) {
       setIsAdmin(true);
     }
+
+    return () => {
+      window.removeEventListener('settingsUpdated', handleSettingsUpdate);
+    };
   }, []);
 
   const handleToggleGST = () => {

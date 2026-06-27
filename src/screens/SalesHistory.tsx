@@ -21,8 +21,23 @@ export const SalesHistory: React.FC = () => {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   useEffect(() => {
+    const handleSalesUpdate = () => {
+      setSales(storage.getSales());
+    };
+    const handleSettingsUpdate = () => {
+      setSettings(storage.getSettings());
+    };
+
+    window.addEventListener('salesUpdated', handleSalesUpdate);
+    window.addEventListener('settingsUpdated', handleSettingsUpdate);
+
     setSales(storage.getSales());
     setSettings(storage.getSettings());
+
+    return () => {
+      window.removeEventListener('salesUpdated', handleSalesUpdate);
+      window.removeEventListener('settingsUpdated', handleSettingsUpdate);
+    };
   }, []);
 
   // Filtered sales listing

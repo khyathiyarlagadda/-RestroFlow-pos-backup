@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UtensilsCrossed, CheckCircle2, ChevronRight, Store, UserPlus } from 'lucide-react';
-import { storage, generateId } from '../utils/storage';
-import type { User, SystemSettings } from '../types';
+import { UtensilsCrossed, CheckCircle2, ChevronRight, Store, UserPlus, Loader2 } from 'lucide-react';
+import { storage } from '../utils/storage';
+import { supabase } from '../utils/supabaseClient';
 
 
 interface SetupWizardProps {
@@ -27,7 +27,9 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
   const [address, setAddress] = useState('');
   const [step2Error, setStep2Error] = useState('');
 
-  const handleStep1Submit = (e: React.FormEvent) => {
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStep1Error('');
 
@@ -56,11 +58,14 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
       return;
     }
 
-    // Username unique check
-    const users = storage.getUsers();
-    if (users.some(u => u.username.toLowerCase() === username.trim().toLowerCase())) {
-      setStep1Error('Username already exists');
-      return;
+    try {
+      const { data } = await supabase.from('profiles').select('id').eq('username', username.trim()).limit(1);
+      if (data && data.length > 0) {
+        setStep1Error('Username already exists');
+        return;
+      }
+    } catch (err) {
+      console.error("Failed to check username uniqueness:", err);
     }
 
     setStep(2);
@@ -82,51 +87,78 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
     setStep(3);
   };
 
-  const handleCompleteSetup = () => {
-    // 1. Save Admin User
-    const adminUser: User = {
-      id: generateId(),
-      username: username.trim(),
-      fullName: fullName.trim(),
-      role: 'Administrator',
-      createdDate: new Date().toISOString(),
-      status: 'active'
-    };
+  const handleCompleteSetup = async () => {
+    setIsCompleting(true);
+    setStep2Error('');
+    try {
+      // 1. Create Restaurant
+      const restaurantId = await storage.createRestaurant(restaurantName.trim());
 
-    // Store admin password in users metadata inside storage. We can expand storage to save password safely or in cleartext (local-only, no backend).
-    // In our case, we can just save it inside user object (or user structure, but since it's local only, we can add a 'password' field locally to the storage record for authorization checks)
-    const usersToSave = [{ ...adminUser, password }];
-    storage.setUsers(usersToSave);
+      // 2. Sign up Admin Auth
+      const userEmail = username.trim().includes('@') ? username.trim() : `${username.trim()}@restroflow.local`;
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: userEmail,
+        password: password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            role: 'Administrator',
+            username: username.trim()
+          }
+        }
+      });
 
-    // 2. Save Restaurant Settings
-    const defaultSettings: SystemSettings = {
-      cgst: 0,
-      sgst: 0,
-      gstEnabled: false,
-      restaurantName: restaurantName.trim(),
-      address: address.trim(),
-      phone: phone.trim(),
-      email: email.trim(),
-      currency: '₹',
-      footerMessage: 'Thank you for dining with us!',
-      printType: 'Thermal',
-      autoPrint: true,
-      containerChargeEnabled: false,
-      defaultContainerCharge: 0,
-      showFields: {
-        gstinOnReceipt: false,
-        phoneOnReceipt: !!phone.trim(),
-        emailOnReceipt: !!email.trim(),
-        footerOnReceipt: true
-      }
-    };
-    storage.setSettings(defaultSettings);
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('User registration failed');
 
-    // Notify app shell that setup is complete
-    onSetupComplete();
+      // 3. Save profile details
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: authData.user.id,
+        username: username.trim(),
+        full_name: fullName.trim(),
+        role: 'Administrator',
+        status: 'active',
+        restaurant_id: restaurantId
+      });
+      if (profileError) throw profileError;
 
-    // Redirect to login
-    navigate('/login');
+      // 4. Save settings
+      const { error: settingsError } = await supabase.from('system_settings').insert({
+        restaurant_id: restaurantId,
+        cgst: 0,
+        sgst: 0,
+        gst_enabled: false,
+        restaurant_name: restaurantName.trim(),
+        address: address.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        currency: '₹',
+        footer_message: 'Thank you for dining with us!',
+        print_type: 'Thermal',
+        auto_print: true,
+        container_charge_enabled: false,
+        default_container_charge: 0,
+        show_fields: {
+          gstinOnReceipt: false,
+          phoneOnReceipt: !!phone.trim(),
+          emailOnReceipt: !!email.trim(),
+          footerOnReceipt: true
+        }
+      });
+      if (settingsError) throw settingsError;
+
+      // Notify app shell that setup is complete
+      await onSetupComplete();
+
+      // Redirect to login
+      navigate('/login');
+    } catch (err: any) {
+      console.error(err);
+      setStep2Error(err.message || 'An error occurred during setup');
+      setStep(2); // Go back to restaurant screen to show error
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   return (
@@ -338,9 +370,11 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
             <div className="border-t border-border w-full pt-4 mt-2">
               <button
                 onClick={handleCompleteSetup}
-                className="w-full h-[42px] bg-primary text-white rounded-btn hover:bg-primary-dark font-semibold text-[14px] transition-colors duration-150"
+                disabled={isCompleting}
+                className="w-full h-[42px] bg-primary text-white rounded-btn hover:bg-primary-dark font-semibold text-[14px] flex items-center justify-center gap-1.5 transition-colors duration-150 disabled:opacity-50"
               >
-                Go to login
+                {isCompleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isCompleting ? 'Completing Setup...' : 'Go to login'}
               </button>
             </div>
           </div>

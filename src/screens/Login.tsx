@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UtensilsCrossed, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { storage } from '../utils/storage';
+import { supabase } from '../utils/supabaseClient';
 
 interface LoginProps {
   onLoginSuccess: () => void;
@@ -21,7 +22,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [usernameError, setUsernameError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setUsernameError(false);
@@ -40,18 +41,14 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
     setIsLoading(true);
 
-    // Simulate small latency for premium UI spinner feel
-    setTimeout(() => {
-      const users = storage.getUsers();
-      // Find matching user (and cast as User & { password?: string } to check local password)
-      const user = users.find(
-        (u: any) =>
-          u.username.toLowerCase() === username.trim().toLowerCase() &&
-          u.role === role &&
-          u.password === password
-      );
+    try {
+      const email = username.trim().includes('@') ? username.trim() : `${username.trim()}@restroflow.local`;
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-      if (!user) {
+      if (authError) {
         setIsLoading(false);
         setError('Invalid username or password for selected role');
         setUsernameError(true);
@@ -59,17 +56,41 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         return;
       }
 
-      if (user.status === 'inactive') {
+      if (!authData.user) {
+        throw new Error('Authentication failed');
+      }
+
+      // Fetch profile to verify role and status
+      const profile = await storage.getUserProfile(authData.user.id);
+      if (!profile) {
+        await supabase.auth.signOut();
+        setIsLoading(false);
+        setError('User profile not found');
+        return;
+      }
+
+      if (profile.role !== role) {
+        await supabase.auth.signOut();
+        setIsLoading(false);
+        setError('Invalid username or password for selected role');
+        return;
+      }
+
+      if (profile.status === 'inactive') {
+        await supabase.auth.signOut();
         setIsLoading(false);
         setError('This account has been deactivated');
         return;
       }
 
-      // Create Session
+      // Initialize cached storage for the tenant
+      await storage.initializeSupabase(profile.restaurant_id);
+
+      // Create local session
       storage.setAuth({
-        userId: user.id,
-        username: user.username,
-        role: user.role,
+        userId: profile.id,
+        username: profile.username,
+        role: profile.role,
         loginTime: new Date().toISOString()
       });
 
@@ -77,12 +98,16 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       onLoginSuccess();
 
       // Redirect depending on role
-      if (user.role === 'Restaurant Owner') {
+      if (profile.role === 'Restaurant Owner') {
         navigate('/pos');
       } else {
         navigate('/dashboard');
       }
-    }, 800);
+    } catch (err: any) {
+      console.error(err);
+      setIsLoading(false);
+      setError(err.message || 'An error occurred during login');
+    }
   };
 
   return (

@@ -27,11 +27,20 @@ export const Inventory: React.FC = () => {
   const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
 
   useEffect(() => {
+    const handleInventoryUpdate = () => {
+      setInventory(storage.getInventory());
+    };
+    window.addEventListener('inventoryUpdated', handleInventoryUpdate);
+
     setInventory(storage.getInventory());
     const auth = storage.getAuth();
     if (auth && (auth.role === 'Administrator' || auth.role === 'Restaurant Owner')) {
       setIsAdmin(true);
     }
+
+    return () => {
+      window.removeEventListener('inventoryUpdated', handleInventoryUpdate);
+    };
   }, []);
 
   const handleOpenAdd = () => {

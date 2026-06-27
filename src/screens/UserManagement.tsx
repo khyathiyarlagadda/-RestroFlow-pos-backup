@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Edit2, Trash2, ShieldAlert, Shield } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, ShieldAlert, Shield, Loader2 } from 'lucide-react';
 import { storage } from '../utils/storage';
 import { Modal } from '../components/Modal';
-
-
+import { supabase, supabaseSignupClient } from '../utils/supabaseClient';
 
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -21,18 +20,28 @@ export const UserManagement: React.FC = () => {
   const [userRole, setUserRole] = useState<'Administrator' | 'Restaurant Owner'>('Restaurant Owner');
   
   const [formError, setFormError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Delete Confirm modal
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState<any | null>(null);
 
   useEffect(() => {
+    const handleUsersUpdate = () => {
+      setUsers(storage.getUsers());
+    };
+    window.addEventListener('usersUpdated', handleUsersUpdate);
+
     setUsers(storage.getUsers());
     const session = storage.getAuth();
     setCurrentSession(session);
     if (session && session.role === 'Administrator') {
       setIsAdmin(true);
     }
+
+    return () => {
+      window.removeEventListener('usersUpdated', handleUsersUpdate);
+    };
   }, []);
 
   const handleOpenAdd = () => {
@@ -50,90 +59,182 @@ export const UserManagement: React.FC = () => {
     setEditingUser(user);
     setUsername(user.username);
     setFullName(user.fullName);
-    setPassword(user.password || '');
-    setConfirmPassword(user.password || '');
+    setPassword('');
+    setConfirmPassword('');
     setUserRole(user.role);
     setFormError('');
     setShowAddEditModal(true);
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+    setIsSaving(true);
 
-    if (!username.trim()) {
-      setFormError('Username is required');
-      return;
-    }
-    if (username.trim().length < 3) {
-      setFormError('Username must be at least 3 characters');
-      return;
-    }
-    if (!fullName.trim()) {
-      setFormError('Full name is required');
-      return;
-    }
-    if (!password) {
-      setFormError('Password is required');
-      return;
-    }
-    if (password.length < 4) {
-      setFormError('Password must be at least 4 characters');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setFormError('Passwords do not match');
-      return;
-    }
+    try {
+      if (!username.trim()) {
+        setFormError('Username is required');
+        setIsSaving(false);
+        return;
+      }
+      if (username.trim().length < 3) {
+        setFormError('Username must be at least 3 characters');
+        setIsSaving(false);
+        return;
+      }
+      if (!fullName.trim()) {
+        setFormError('Full name is required');
+        setIsSaving(false);
+        return;
+      }
 
-    const currentUsers = [...users];
+      // Validate passwords
+      if (!editingUser) {
+        if (!password) {
+          setFormError('Password is required');
+          setIsSaving(false);
+          return;
+        }
+        if (password.length < 4) {
+          setFormError('Password must be at least 4 characters');
+          setIsSaving(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setFormError('Passwords do not match');
+          setIsSaving(false);
+          return;
+        }
+      } else if (editingUser.id === currentSession?.userId && password) {
+        if (password.length < 4) {
+          setFormError('Password must be at least 4 characters');
+          setIsSaving(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setFormError('Passwords do not match');
+          setIsSaving(false);
+          return;
+        }
+      }
 
-    // Username unique check
-    const nameExists = currentUsers.some(
-      (u) =>
-        u.username.toLowerCase() === username.trim().toLowerCase() &&
-        u.id !== editingUser?.id
-    );
+      const currentUsers = [...users];
 
-    if (nameExists) {
-      setFormError('Username already exists');
-      return;
-    }
+      // Username unique check
+      const nameExists = currentUsers.some(
+        (u) =>
+          u.username.toLowerCase() === username.trim().toLowerCase() &&
+          u.id !== editingUser?.id
+      );
 
-    if (editingUser) {
-      // Edit
-      const updated = currentUsers.map((u) => {
-        if (u.id === editingUser.id) {
-          return {
-            ...u,
-            username: username.trim(),
-            fullName: fullName.trim(),
-            password: password,
+      if (nameExists) {
+        setFormError('Username already exists');
+        setIsSaving(false);
+        return;
+      }
+
+      const restaurantId = storage.getRestaurantId();
+      if (!restaurantId) {
+        throw new Error('Restaurant ID not found');
+      }
+
+      if (editingUser) {
+        // 1. If editing own profile and changed password, update it
+        if (editingUser.id === currentSession?.userId && password) {
+          const { error: authUpdateError } = await supabase.auth.updateUser({
+            password: password
+          });
+          if (authUpdateError) throw authUpdateError;
+        }
+
+        // 2. Update profiles table
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: fullName.trim(),
+            role: userRole
+          })
+          .eq('id', editingUser.id);
+
+        if (profileError) throw profileError;
+
+        // 3. Update local cache
+        const updated = currentUsers.map((u) => {
+          if (u.id === editingUser.id) {
+            return {
+              ...u,
+              fullName: fullName.trim(),
+              role: userRole
+            };
+          }
+          return u;
+        });
+        storage.setUsers(updated);
+        setUsers(updated);
+
+        // 4. If editing own user profile, update currentSession/localAuth if role changed
+        if (editingUser.id === currentSession?.userId) {
+          const newSession = {
+            ...currentSession,
             role: userRole
           };
+          storage.setAuth(newSession);
+          setCurrentSession(newSession);
         }
-        return u;
-      });
-      storage.setUsers(updated);
-      setUsers(updated);
-    } else {
-      // Add
-      const newUser = {
-        id: storage.generateId(),
-        username: username.trim(),
-        fullName: fullName.trim(),
-        password: password,
-        role: userRole,
-        createdDate: new Date().toISOString(),
-        status: 'active' as const
-      };
-      const updated = [...currentUsers, newUser];
-      storage.setUsers(updated);
-      setUsers(updated);
-    }
+      } else {
+        // Registering a new cashier/owner
+        const userEmail = username.trim().includes('@') ? username.trim() : `${username.trim()}@restroflow.local`;
+        
+        // Use supabaseSignupClient so standard persisted session isn't logged out
+        const { data: authData, error: authError } = await supabaseSignupClient.auth.signUp({
+          email: userEmail,
+          password: password,
+          options: {
+            data: {
+              full_name: fullName.trim(),
+              role: userRole,
+              username: username.trim()
+            }
+          }
+        });
 
-    setShowAddEditModal(false);
-    setEditingUser(null);
+        if (authError) throw authError;
+        if (!authData.user) throw new Error('Registration failed');
+
+        // Create database profile entry
+        const { error: profileError } = await supabase.from('profiles').insert({
+          id: authData.user.id,
+          username: username.trim(),
+          full_name: fullName.trim(),
+          role: userRole,
+          status: 'active',
+          restaurant_id: restaurantId
+        });
+
+        if (profileError) throw profileError;
+
+        // Update local cache
+        const newUser = {
+          id: authData.user.id,
+          username: username.trim(),
+          fullName: fullName.trim(),
+          role: userRole,
+          createdDate: new Date().toISOString(),
+          status: 'active' as const
+        };
+        const updated = [...currentUsers, newUser];
+        storage.setUsers(updated);
+        setUsers(updated);
+      }
+
+      setShowAddEditModal(false);
+      setEditingUser(null);
+    } catch (err: any) {
+      console.error(err);
+      setFormError(err.message || 'An error occurred while saving user');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleToggleStatus = (user: any) => {
@@ -286,7 +387,7 @@ export const UserManagement: React.FC = () => {
       {/* --- ADD/EDIT USER MODAL --- */}
       <Modal
         isOpen={showAddEditModal}
-        onClose={() => setShowAddEditModal(false)}
+        onClose={() => !isSaving && setShowAddEditModal(false)}
         title={editingUser ? 'Edit credentials' : 'Add user'}
       >
         <form onSubmit={handleSaveUser} className="flex flex-col gap-4">
@@ -297,7 +398,7 @@ export const UserManagement: React.FC = () => {
               type="text"
               placeholder="e.g. jdoe"
               value={username}
-              disabled={!!editingUser}
+              disabled={!!editingUser || isSaving}
               onChange={(e) => setUsername(e.target.value)}
               className={formError && !username ? 'border-danger-custom' : ''}
               autoComplete="off"
@@ -311,34 +412,51 @@ export const UserManagement: React.FC = () => {
               type="text"
               placeholder="e.g. John Doe"
               value={fullName}
+              disabled={isSaving}
               onChange={(e) => setFullName(e.target.value)}
               className={formError && !fullName ? 'border-danger-custom' : ''}
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="usrPass">Password *</label>
-            <input
-              id="usrPass"
-              type="password"
-              placeholder="Minimum 4 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={formError && (!password || password.length < 4) ? 'border-danger-custom' : ''}
-            />
-          </div>
+          {(!editingUser || editingUser.id === currentSession?.userId) && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="usrPass">
+                  {editingUser ? 'New Password (leave blank to keep current)' : 'Password *'}
+                </label>
+                <input
+                  id="usrPass"
+                  type="password"
+                  placeholder={editingUser ? 'Enter new password' : 'Minimum 4 characters'}
+                  value={password}
+                  disabled={isSaving}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={formError && (!editingUser && !password || password.length > 0 && password.length < 4) ? 'border-danger-custom' : ''}
+                />
+              </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="usrConfirm">Confirm password *</label>
-            <input
-              id="usrConfirm"
-              type="password"
-              placeholder="Re-enter password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className={formError && password !== confirmPassword ? 'border-danger-custom' : ''}
-            />
-          </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="usrConfirm">
+                  {editingUser ? 'Confirm New Password' : 'Confirm password *'}
+                </label>
+                <input
+                  id="usrConfirm"
+                  type="password"
+                  placeholder={editingUser ? 'Re-enter new password' : 'Re-enter password'}
+                  value={confirmPassword}
+                  disabled={isSaving}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className={formError && password !== confirmPassword ? 'border-danger-custom' : ''}
+                />
+              </div>
+            </>
+          )}
+
+          {editingUser && editingUser.id !== currentSession?.userId && (
+            <div className="text-[12px] text-text-muted italic bg-bg-page/50 p-2.5 rounded-btn border border-border/60">
+              Note: For security reasons, passwords for other accounts can only be updated by those users when they are logged in.
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="usrRole">Role *</label>
@@ -346,7 +464,7 @@ export const UserManagement: React.FC = () => {
               id="usrRole"
               value={userRole}
               onChange={(e) => setUserRole(e.target.value as any)}
-              disabled={editingUser?.id === currentSession?.userId}
+              disabled={editingUser?.id === currentSession?.userId || isSaving}
             >
               <option value="Administrator">Administrator</option>
               <option value="Restaurant Owner">Restaurant Owner</option>
@@ -363,15 +481,24 @@ export const UserManagement: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowAddEditModal(false)}
-              className="flex-1 h-[36px] border border-border text-text-primary rounded-btn hover:bg-bg-page text-[14px] font-medium transition-colors duration-150"
+              disabled={isSaving}
+              className="flex-1 h-[36px] border border-border text-text-primary rounded-btn hover:bg-bg-page text-[14px] font-medium transition-colors duration-150 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 h-[36px] bg-primary text-white rounded-btn hover:bg-primary-dark text-[14px] font-medium transition-colors duration-150"
+              disabled={isSaving}
+              className="flex-1 h-[36px] bg-primary text-white rounded-btn hover:bg-primary-dark text-[14px] font-medium transition-colors duration-150 flex items-center justify-center gap-1.5 disabled:opacity-85"
             >
-              Save Credentials
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Credentials'
+              )}
             </button>
           </div>
         </form>

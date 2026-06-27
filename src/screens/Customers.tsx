@@ -116,9 +116,29 @@ export const Customers: React.FC = () => {
   };
 
   useEffect(() => {
+    const handleCustomersUpdate = () => {
+      setCustomers(storage.getCustomers());
+    };
+    const handleSalesUpdate = () => {
+      setSales(storage.getSales());
+    };
+    const handleSettingsUpdate = () => {
+      setSettings(storage.getSettings());
+    };
+
+    window.addEventListener('customersUpdated', handleCustomersUpdate);
+    window.addEventListener('salesUpdated', handleSalesUpdate);
+    window.addEventListener('settingsUpdated', handleSettingsUpdate);
+
     setCustomers(storage.getCustomers());
     setSales(storage.getSales());
     setSettings(storage.getSettings());
+
+    return () => {
+      window.removeEventListener('customersUpdated', handleCustomersUpdate);
+      window.removeEventListener('salesUpdated', handleSalesUpdate);
+      window.removeEventListener('settingsUpdated', handleSettingsUpdate);
+    };
   }, []);
 
   // Filtered customer listing

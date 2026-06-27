@@ -28,12 +28,21 @@ export const Tables: React.FC = () => {
   const [tableToDelete, setTableToDelete] = useState<Table | null>(null);
 
   useEffect(() => {
+    const handleTablesUpdate = () => {
+      setTables(storage.getTables());
+    };
+    window.addEventListener('tablesUpdated', handleTablesUpdate);
+
     setTables(storage.getTables());
     setHeldCarts(storage.getActiveCart());
     const auth = storage.getAuth();
     if (auth && (auth.role === 'Administrator' || auth.role === 'Restaurant Owner')) {
       setIsAdmin(true);
     }
+
+    return () => {
+      window.removeEventListener('tablesUpdated', handleTablesUpdate);
+    };
   }, []);
 
   const handleOpenAdd = () => {

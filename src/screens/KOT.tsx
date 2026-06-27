@@ -22,17 +22,15 @@ export const KOTScreen: React.FC = () => {
       setTick((t) => t + 1);
     }, 15000);
 
-    // Sync in real-time across tabs using localStorage event
-    const handleStorageEvent = (e: StorageEvent) => {
-      if (e.key === 'restroflow_kot') {
-        loadKOTs();
-      }
+    // Sync in real-time across tabs using custom window event
+    const handleKotUpdate = () => {
+      loadKOTs();
     };
-    window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener('kotUpdated', handleKotUpdate);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('storage', handleStorageEvent);
+      window.removeEventListener('kotUpdated', handleKotUpdate);
     };
   }, []);
 

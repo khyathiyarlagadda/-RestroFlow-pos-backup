@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { storage } from './utils/storage';
+import { supabase } from './utils/supabaseClient';
 import type { Session } from './types';
 import { Sidebar } from './components/Sidebar';
 
@@ -19,6 +20,7 @@ import { SalesHistory } from './screens/SalesHistory';
 import { Customers } from './screens/Customers';
 import { SettingsScreen } from './screens/Settings';
 import { UserManagement } from './screens/UserManagement';
+import { SupabaseConfigRequired } from './components/SupabaseConfigRequired';
 
 // Layout wrapper for authenticated screens
 const AppLayout: React.FC<{ session: Session; onLogout: () => void }> = ({ session, onLogout }) => {
@@ -39,16 +41,65 @@ export const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [hasUsers, setHasUsers] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
+  const [isConfigured, setIsConfigured] = useState<boolean>(true);
 
-  const checkInitialState = () => {
-    // 1. Check if users table is populated
-    const users = storage.getUsers();
-    setHasUsers(users.length > 0);
+  const checkInitialState = async () => {
+    try {
+      setLoading(true);
+      const configured = !!(
+        import.meta.env.VITE_SUPABASE_URL && 
+        import.meta.env.VITE_SUPABASE_ANON_KEY &&
+        !String(import.meta.env.VITE_SUPABASE_URL).includes('placeholder')
+      );
+      setIsConfigured(configured);
 
-    // 2. Check for active login session
-    const auth = storage.getAuth();
-    setSession(auth);
-    setLoading(false);
+      if (!configured) {
+        setLoading(false);
+        return;
+      }
+
+      // Check if any restaurant exists in database
+      const hasRestaurant = await storage.hasAnyRestaurant();
+      console.log("[RestroFlow] Restaurant detected in Supabase:", hasRestaurant);
+      setHasUsers(hasRestaurant);
+
+      if (!hasRestaurant) {
+        setSession(null);
+        setLoading(false);
+        return;
+      }
+
+      // Check active Supabase session
+      const { data: { session: supabaseSession } } = await supabase.auth.getSession();
+      if (supabaseSession) {
+        const profile = await storage.getUserProfile(supabaseSession.user.id);
+        if (profile && profile.status === 'active') {
+          // Initialize local cache from Supabase
+          await storage.initializeSupabase(profile.restaurant_id);
+          
+          storage.setAuth({
+            userId: profile.id,
+            username: profile.username,
+            role: profile.role,
+            loginTime: new Date().toISOString()
+          });
+          setSession(storage.getAuth());
+        } else {
+          await supabase.auth.signOut();
+          storage.clearAuth();
+          setSession(null);
+        }
+      } else {
+        storage.clearAuth();
+        setSession(null);
+      }
+    } catch (e) {
+      console.error("Initialization error:", e);
+      setHasUsers(false);
+      setSession(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -70,6 +121,10 @@ export const App: React.FC = () => {
         Loading RestroFlow...
       </div>
     );
+  }
+
+  if (!isConfigured) {
+    return <SupabaseConfigRequired />;
   }
 
   return (
