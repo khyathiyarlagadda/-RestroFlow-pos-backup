@@ -182,6 +182,17 @@ BEGIN
 END;
 $$;
 
+-- Helper function to check if an Administrator exists (bypasses RLS safely if needed)
+CREATE OR REPLACE FUNCTION public.has_admin()
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN EXISTS (SELECT 1 FROM public.profiles WHERE role = 'Administrator');
+END;
+$$;
+
 -- Alter profiles role constraint to support 'Owner' and 'Staff' on existing instances
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
 ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('Administrator', 'Restaurant Owner', 'Owner', 'Staff'));

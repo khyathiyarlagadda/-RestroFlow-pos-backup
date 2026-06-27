@@ -60,10 +60,13 @@ export const App: React.FC = () => {
 
       // Check if any restaurant exists in database
       const hasRestaurant = await storage.hasAnyRestaurant();
-      console.log("[RestroFlow] Restaurant detected in Supabase:", hasRestaurant);
-      setHasUsers(hasRestaurant);
+      const hasAdmin = hasRestaurant ? await storage.hasAnyAdmin() : false;
 
-      if (!hasRestaurant) {
+      const hasRestaurantAndAdmin = hasRestaurant && hasAdmin;
+      console.log("[RestroFlow] Restaurant detected in Supabase:", hasRestaurant, "Admin detected:", hasAdmin);
+      setHasUsers(hasRestaurantAndAdmin);
+
+      if (!hasRestaurantAndAdmin) {
         setSession(null);
         setLoading(false);
         return;

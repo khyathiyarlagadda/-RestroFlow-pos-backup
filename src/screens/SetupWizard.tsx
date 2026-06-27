@@ -12,20 +12,68 @@ interface SetupWizardProps {
 export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => {
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
+  const [existingRestaurantId, setExistingRestaurantId] = useState<string | null>(null);
+  const [isCheckingExisting, setIsCheckingExisting] = useState(true);
 
-  // Redirect to login if a restaurant already exists in database
+  // Step 1: Restaurant Details
+  const [restaurantName, setRestaurantName] = useState('RestroFlow POS');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [gstin, setGstin] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [step1Error, setStep1Error] = useState('');
+
+  // Step 2: Admin account
+  const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [step2Error, setStep2Error] = useState('');
+
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  // Redirect to login if a restaurant already exists AND at least one Administrator exists
   useEffect(() => {
     let active = true;
     const checkExisting = async () => {
       try {
         const exists = await storage.hasAnyRestaurant();
-        if (exists && active) {
-          console.warn("[RestroFlow] Restaurant already exists. Skipping SetupWizard.");
-          await onSetupComplete();
-          navigate('/login');
+        if (exists) {
+          // Fetch the existing restaurant details
+          const { data: restData } = await supabase.from('restaurants').select('*').limit(1);
+          if (restData && restData.length > 0) {
+            const rest = restData[0];
+            
+            // Check if there is an Administrator profile
+            const hasAdmin = await storage.hasAnyAdmin();
+            
+            if (hasAdmin) {
+              // Both exist! Redirect to login.
+              if (active) {
+                console.warn("[RestroFlow] Restaurant and Admin already exist. Skipping SetupWizard.");
+                await onSetupComplete();
+                navigate('/login');
+              }
+            } else {
+              // Restaurant exists but no Admin exists!
+              // Go directly to Step 2 (Administrator details).
+              if (active) {
+                setExistingRestaurantId(rest.id);
+                setRestaurantName(rest.name);
+                setLogoUrl(rest.logo_url || '');
+                setStep(2);
+              }
+            }
+          }
+        } else {
+          if (active) setStep(1);
         }
       } catch (e) {
-        console.error("Error during SetupWizard mount check:", e);
+        console.error("Error during SetupWizard check:", e);
+      } finally {
+        if (active) setIsCheckingExisting(false);
       }
     };
     checkExisting();
@@ -34,87 +82,34 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
     };
   }, [onSetupComplete, navigate]);
 
-  // Step 1: Admin account
-  const [username, setUsername] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [step1Error, setStep1Error] = useState('');
-
-  // Step 2: Restaurant Details
-  const [restaurantName, setRestaurantName] = useState('RestroFlow POS');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [address, setAddress] = useState('');
-  const [gstin, setGstin] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
-  const [step2Error, setStep2Error] = useState('');
-
-  const [isCompleting, setIsCompleting] = useState(false);
-
   const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStep1Error('');
 
-    if (!username.trim()) {
-      setStep1Error('Username is required');
+    if (!restaurantName.trim()) {
+      setStep1Error('Restaurant name is required');
       return;
-    }
-    if (username.trim().length < 3) {
-      setStep1Error('Username must be at least 3 characters');
-      return;
-    }
-    if (!fullName.trim()) {
-      setStep1Error('Full name is required');
-      return;
-    }
-    if (!adminEmail.trim()) {
-      setStep1Error('Email is required');
-      return;
-    }
-    if (!adminEmail.trim().includes('@')) {
-      setStep1Error('Invalid email format');
-      return;
-    }
-    if (!password) {
-      setStep1Error('Password is required');
-      return;
-    }
-    if (password.length < 6) {
-      setStep1Error('Password must be at least 6 characters');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setStep1Error('Passwords do not match');
-      return;
-    }
-
-    try {
-      const { data } = await supabase.from('profiles').select('id').eq('username', username.trim()).limit(1);
-      if (data && data.length > 0) {
-        setStep1Error('Username already exists');
-        return;
-      }
-    } catch (err) {
-      console.error("Failed to check username uniqueness:", err);
     }
 
     setStep(2);
   };
 
-  const runDatabaseSetup = async (nameToUse: string): Promise<boolean> => {
+  const runDatabaseSetup = async (): Promise<boolean> => {
     setIsCompleting(true);
     setStep2Error('');
     try {
-      // 0. Double check if a restaurant already exists to prevent duplicate creations
-      const exists = await storage.hasAnyRestaurant();
-      if (exists) {
-        throw new Error('A restaurant configuration already exists in the database. Please reload the app or go to the login page.');
-      }
+      let restaurantId = existingRestaurantId;
 
-      // 1. Create Restaurant
-      const restaurantId = await storage.createRestaurant(nameToUse.trim(), logoUrl.trim() || undefined);
+      if (!restaurantId) {
+        // 0. Double check if a restaurant already exists to prevent duplicate creations
+        const exists = await storage.hasAnyRestaurant();
+        if (exists) {
+          throw new Error('A restaurant configuration already exists in the database. Please reload the app or go to the login page.');
+        }
+
+        // 1. Create Restaurant
+        restaurantId = await storage.createRestaurant(restaurantName.trim(), logoUrl.trim() || undefined);
+      }
 
       // 2. Sign up Admin Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -144,31 +139,39 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
       });
       if (profileError) throw profileError;
 
-      // 4. Save settings
-      const { error: settingsError } = await supabase.from('system_settings').insert({
-        restaurant_id: restaurantId,
-        cgst: 0,
-        sgst: 0,
-        gst_enabled: !!gstin.trim(),
-        gstin: gstin.trim() || null,
-        restaurant_name: nameToUse.trim(),
-        address: address.trim(),
-        phone: phone.trim(),
-        email: email.trim(),
-        currency: '₹',
-        footer_message: 'Thank you for dining with us!',
-        print_type: 'Thermal',
-        auto_print: true,
-        container_charge_enabled: false,
-        default_container_charge: 0,
-        show_fields: {
-          gstinOnReceipt: !!gstin.trim(),
-          phoneOnReceipt: !!phone.trim(),
-          emailOnReceipt: !!email.trim(),
-          footerOnReceipt: true
-        }
-      });
-      if (settingsError) throw settingsError;
+      // 4. Save settings if not already present
+      const { data: existingSettings } = await supabase
+        .from('system_settings')
+        .select('id')
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle();
+
+      if (!existingSettings) {
+        const { error: settingsError } = await supabase.from('system_settings').insert({
+          restaurant_id: restaurantId,
+          cgst: 0,
+          sgst: 0,
+          gst_enabled: !!gstin.trim(),
+          gstin: gstin.trim() || null,
+          restaurant_name: restaurantName.trim(),
+          address: address.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+          currency: '₹',
+          footer_message: 'Thank you for dining with us!',
+          print_type: 'Thermal',
+          auto_print: true,
+          container_charge_enabled: false,
+          default_container_charge: 0,
+          show_fields: {
+            gstinOnReceipt: !!gstin.trim(),
+            phoneOnReceipt: !!phone.trim(),
+            emailOnReceipt: !!email.trim(),
+            footerOnReceipt: true
+          }
+        });
+        if (settingsError) throw settingsError;
+      }
 
       return true;
     } catch (err: any) {
@@ -184,20 +187,50 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
     e.preventDefault();
     setStep2Error('');
 
-    if (!restaurantName.trim()) {
-      setStep2Error('Restaurant name is required');
+    if (!username.trim()) {
+      setStep2Error('Username is required');
+      return;
+    }
+    if (username.trim().length < 3) {
+      setStep2Error('Username must be at least 3 characters');
+      return;
+    }
+    if (!fullName.trim()) {
+      setStep2Error('Full name is required');
+      return;
+    }
+    if (!adminEmail.trim()) {
+      setStep2Error('Email is required');
+      return;
+    }
+    if (!adminEmail.trim().includes('@')) {
+      setStep2Error('Invalid email format');
+      return;
+    }
+    if (!password) {
+      setStep2Error('Password is required');
+      return;
+    }
+    if (password.length < 6) {
+      setStep2Error('Password must be at least 6 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setStep2Error('Passwords do not match');
       return;
     }
 
-    const success = await runDatabaseSetup(restaurantName);
-    if (success) {
-      setStep(3);
+    try {
+      const { data } = await supabase.from('profiles').select('id').eq('username', username.trim()).limit(1);
+      if (data && data.length > 0) {
+        setStep2Error('Username already exists');
+        return;
+      }
+    } catch (err) {
+      console.error("Failed to check username uniqueness:", err);
     }
-  };
 
-  const handleSkipStep2 = async () => {
-    const defaultName = `${fullName.trim()}'s Restaurant`;
-    const success = await runDatabaseSetup(defaultName);
+    const success = await runDatabaseSetup();
     if (success) {
       setStep(3);
     }
@@ -212,6 +245,17 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
     }
   };
 
+
+  if (isCheckingExisting) {
+    return (
+      <div className="min-h-screen bg-bg-page flex items-center justify-center text-text-muted select-none font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="text-[14px] font-medium tracking-[0.2px]">Checking configuration...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen h-screen max-h-screen bg-bg-page flex items-center justify-center p-4 sm:p-6 select-none font-sans overflow-hidden">
@@ -265,96 +309,6 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
             {/* Scrollable Form Body */}
             <div className="flex-1 overflow-y-auto pr-1 -mr-1 custom-scrollbar flex flex-col gap-4 py-1">
               <div className="flex items-center gap-2 text-primary">
-                <UserPlus className="w-5 h-5 shrink-0" />
-                <h3 className="section-heading text-[16px] sm:text-[18px]">Create administrator account</h3>
-              </div>
-
-              <div className="flex flex-col">
-                <label htmlFor="username" className="input-label-custom">Username</label>
-                <input
-                  id="username"
-                  type="text"
-                  autoComplete="off"
-                  placeholder="e.g. admin"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className={step1Error && !username ? 'border-danger-custom' : ''}
-                />
-              </div>
-
-              <div className="flex flex-col">
-                <label htmlFor="fullName" className="input-label-custom">Full name</label>
-                <input
-                  id="fullName"
-                  type="text"
-                  placeholder="e.g. John Doe"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className={step1Error && !fullName ? 'border-danger-custom' : ''}
-                />
-              </div>
-
-              <div className="flex flex-col">
-                <label htmlFor="adminEmail" className="input-label-custom">Email address</label>
-                <input
-                  id="adminEmail"
-                  type="email"
-                  placeholder="e.g. admin@restroflow.com"
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  className={step1Error && (!adminEmail || !adminEmail.includes('@')) ? 'border-danger-custom' : ''}
-                />
-              </div>
-
-              <div className="flex flex-col">
-                <label htmlFor="password" className="input-label-custom">Password</label>
-                <input
-                  id="password"
-                  type="password"
-                  placeholder="Minimum 6 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={step1Error && (!password || password.length < 6) ? 'border-danger-custom' : ''}
-                />
-              </div>
-
-              <div className="flex flex-col">
-                <label htmlFor="confirmPassword" className="input-label-custom">Confirm password</label>
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Re-enter password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={step1Error && (password !== confirmPassword || password.length < 6) ? 'border-danger-custom' : ''}
-                />
-              </div>
-
-              {step1Error && (
-                <span className="text-[13px] text-danger-custom font-semibold mt-1 sentence-case">
-                  {step1Error}
-                </span>
-              )}
-            </div>
-
-            {/* Sticky/Fixed Footer */}
-            <div className="border-t border-border pt-4 mt-4 flex flex-col shrink-0">
-              <button
-                type="submit"
-                className="w-full h-[40px] sm:h-[42px] bg-primary text-white rounded-btn hover:bg-primary-dark font-semibold text-[14px] tracking-[0.2px] flex items-center justify-center gap-1.5 transition-colors duration-150"
-              >
-                Continue to restaurant details
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </form>
-        )}
-
-        {step === 2 && (
-          <form onSubmit={handleStep2Submit} className="flex-1 flex flex-col overflow-hidden">
-            {/* Scrollable Form Body */}
-            <div className="flex-1 overflow-y-auto pr-1 -mr-1 custom-scrollbar flex flex-col gap-4 py-1">
-              <div className="flex items-center gap-2 text-primary">
                 <Store className="w-5 h-5 shrink-0" />
                 <h3 className="section-heading text-[16px] sm:text-[18px]">Restaurant details</h3>
               </div>
@@ -367,7 +321,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
                   placeholder="e.g. Spice Garden"
                   value={restaurantName}
                   onChange={(e) => setRestaurantName(e.target.value)}
-                  className={step2Error && !restaurantName ? 'border-danger-custom' : ''}
+                  className={step1Error && !restaurantName ? 'border-danger-custom' : ''}
                 />
               </div>
 
@@ -426,6 +380,96 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
                 />
               </div>
 
+              {step1Error && (
+                <span className="text-[13px] text-danger-custom font-semibold mt-1 sentence-case">
+                  {step1Error}
+                </span>
+              )}
+            </div>
+
+            {/* Sticky/Fixed Footer */}
+            <div className="border-t border-border pt-4 mt-4 flex flex-col shrink-0">
+              <button
+                type="submit"
+                className="w-full h-[40px] sm:h-[42px] bg-primary text-white rounded-btn hover:bg-primary-dark font-semibold text-[14px] tracking-[0.2px] flex items-center justify-center gap-1.5 transition-colors duration-150"
+              >
+                Continue to administrator account
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 2 && (
+          <form onSubmit={handleStep2Submit} className="flex-1 flex flex-col overflow-hidden">
+            {/* Scrollable Form Body */}
+            <div className="flex-1 overflow-y-auto pr-1 -mr-1 custom-scrollbar flex flex-col gap-4 py-1">
+              <div className="flex items-center gap-2 text-primary">
+                <UserPlus className="w-5 h-5 shrink-0" />
+                <h3 className="section-heading text-[16px] sm:text-[18px]">Create administrator account</h3>
+              </div>
+
+              <div className="flex flex-col">
+                <label htmlFor="username" className="input-label-custom">Username</label>
+                <input
+                  id="username"
+                  type="text"
+                  autoComplete="off"
+                  placeholder="e.g. admin"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className={step2Error && !username ? 'border-danger-custom' : ''}
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <label htmlFor="fullName" className="input-label-custom">Full name</label>
+                <input
+                  id="fullName"
+                  type="text"
+                  placeholder="e.g. John Doe"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className={step2Error && !fullName ? 'border-danger-custom' : ''}
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <label htmlFor="adminEmail" className="input-label-custom">Email address</label>
+                <input
+                  id="adminEmail"
+                  type="email"
+                  placeholder="e.g. admin@restroflow.com"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  className={step2Error && (!adminEmail || !adminEmail.includes('@')) ? 'border-danger-custom' : ''}
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <label htmlFor="password" className="input-label-custom">Password</label>
+                <input
+                  id="password"
+                  type="password"
+                  placeholder="Minimum 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={step2Error && (!password || password.length < 6) ? 'border-danger-custom' : ''}
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <label htmlFor="confirmPassword" className="input-label-custom">Confirm password</label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Re-enter password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className={step2Error && (password !== confirmPassword || password.length < 6) ? 'border-danger-custom' : ''}
+                />
+              </div>
+
               {step2Error && (
                 <span className="text-[13px] text-danger-custom font-semibold mt-1 sentence-case">
                   {step2Error}
@@ -435,21 +479,23 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
 
             {/* Sticky/Fixed Footer */}
             <div className="border-t border-border pt-4 mt-4 flex items-center gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={handleSkipStep2}
-                disabled={isCompleting}
-                className="flex-1 h-[40px] sm:h-[42px] border border-border text-text-primary rounded-btn hover:bg-bg-page font-semibold text-[13px] sm:text-[14px] transition-colors duration-150 disabled:opacity-50"
-              >
-                Skip this step
-              </button>
+              {!existingRestaurantId && (
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  disabled={isCompleting}
+                  className="flex-1 h-[40px] sm:h-[42px] border border-border text-text-primary rounded-btn hover:bg-bg-page font-semibold text-[13px] sm:text-[14px] transition-colors duration-150 disabled:opacity-50"
+                >
+                  Back
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={isCompleting}
                 className="flex-1 h-[40px] sm:h-[42px] bg-primary text-white rounded-btn hover:bg-primary-dark font-semibold text-[13px] sm:text-[14px] flex items-center justify-center gap-1.5 transition-colors duration-150 disabled:opacity-50"
               >
                 {isCompleting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isCompleting ? 'Saving...' : 'Next'}
+                {isCompleting ? 'Saving...' : 'Finish Setup'}
                 {!isCompleting && <ChevronRight className="w-4 h-4" />}
               </button>
             </div>

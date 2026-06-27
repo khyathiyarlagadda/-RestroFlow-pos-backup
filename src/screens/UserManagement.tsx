@@ -457,11 +457,11 @@ export const UserManagement: React.FC = () => {
                 <input
                   id="usrPass"
                   type="password"
-                  placeholder={editingUser ? 'Enter new password' : 'Minimum 4 characters'}
+                  placeholder={editingUser ? 'Enter new password' : 'Minimum 6 characters'}
                   value={password}
                   disabled={isSaving}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={formError && (!editingUser && !password || password.length > 0 && password.length < 4) ? 'border-danger-custom' : ''}
+                  className={formError && (!editingUser && !password || password.length > 0 && password.length < 6) ? 'border-danger-custom' : ''}
                 />
               </div>
 
