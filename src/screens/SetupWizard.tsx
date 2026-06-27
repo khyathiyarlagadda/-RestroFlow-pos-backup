@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UtensilsCrossed, CheckCircle2, ChevronRight, Store, UserPlus, Loader2 } from 'lucide-react';
 import { storage } from '../utils/storage';
@@ -12,6 +12,27 @@ interface SetupWizardProps {
 export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => {
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
+
+  // Redirect to login if a restaurant already exists in database
+  useEffect(() => {
+    let active = true;
+    const checkExisting = async () => {
+      try {
+        const exists = await storage.hasAnyRestaurant();
+        if (exists && active) {
+          console.warn("[RestroFlow] Restaurant already exists. Skipping SetupWizard.");
+          await onSetupComplete();
+          navigate('/login');
+        }
+      } catch (e) {
+        console.error("Error during SetupWizard mount check:", e);
+      }
+    };
+    checkExisting();
+    return () => {
+      active = false;
+    };
+  }, [onSetupComplete, navigate]);
 
   // Step 1: Admin account
   const [username, setUsername] = useState('');
@@ -49,8 +70,8 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
       setStep1Error('Password is required');
       return;
     }
-    if (password.length < 4) {
-      setStep1Error('Password must be at least 4 characters');
+    if (password.length < 6) {
+      setStep1Error('Password must be at least 6 characters');
       return;
     }
     if (password !== confirmPassword) {
@@ -71,28 +92,18 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
     setStep(2);
   };
 
-  const handleStep2Submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setStep2Error('');
-
-    if (!restaurantName.trim()) {
-      setStep2Error('Restaurant name is required');
-      return;
-    }
-
-    setStep(3);
-  };
-
-  const handleSkipStep2 = () => {
-    setStep(3);
-  };
-
-  const handleCompleteSetup = async () => {
+  const runDatabaseSetup = async (nameToUse: string): Promise<boolean> => {
     setIsCompleting(true);
     setStep2Error('');
     try {
+      // 0. Double check if a restaurant already exists to prevent duplicate creations
+      const exists = await storage.hasAnyRestaurant();
+      if (exists) {
+        throw new Error('A restaurant configuration already exists in the database. Please reload the app or go to the login page.');
+      }
+
       // 1. Create Restaurant
-      const restaurantId = await storage.createRestaurant(restaurantName.trim());
+      const restaurantId = await storage.createRestaurant(nameToUse.trim());
 
       // 2. Sign up Admin Auth
       const userEmail = username.trim().includes('@') ? username.trim() : `${username.trim()}@restroflow.local`;
@@ -128,7 +139,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
         cgst: 0,
         sgst: 0,
         gst_enabled: false,
-        restaurant_name: restaurantName.trim(),
+        restaurant_name: nameToUse.trim(),
         address: address.trim(),
         phone: phone.trim(),
         email: email.trim(),
@@ -147,19 +158,48 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
       });
       if (settingsError) throw settingsError;
 
-      // Notify app shell that setup is complete
-      await onSetupComplete();
-
-      // Redirect to login
-      navigate('/login');
+      return true;
     } catch (err: any) {
       console.error(err);
-      setStep2Error(err.message || 'An error occurred during setup');
-      setStep(2); // Go back to restaurant screen to show error
+      setStep2Error(err.message || 'An error occurred during database setup');
+      return false;
     } finally {
       setIsCompleting(false);
     }
   };
+
+  const handleStep2Submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStep2Error('');
+
+    if (!restaurantName.trim()) {
+      setStep2Error('Restaurant name is required');
+      return;
+    }
+
+    const success = await runDatabaseSetup(restaurantName);
+    if (success) {
+      setStep(3);
+    }
+  };
+
+  const handleSkipStep2 = async () => {
+    const defaultName = `${fullName.trim()}'s Restaurant`;
+    const success = await runDatabaseSetup(defaultName);
+    if (success) {
+      setStep(3);
+    }
+  };
+
+  const handleCompleteSetup = async () => {
+    try {
+      await onSetupComplete();
+      navigate('/login');
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
+
 
   return (
     <div className="min-h-screen h-screen max-h-screen bg-bg-page flex items-center justify-center p-4 sm:p-6 select-none font-sans overflow-hidden">
@@ -247,10 +287,10 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
                 <input
                   id="password"
                   type="password"
-                  placeholder="Minimum 4 characters"
+                  placeholder="Minimum 6 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={step1Error && (!password || password.length < 4) ? 'border-danger-custom' : ''}
+                  className={step1Error && (!password || password.length < 6) ? 'border-danger-custom' : ''}
                 />
               </div>
 
@@ -262,7 +302,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
                   placeholder="Re-enter password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={step1Error && password !== confirmPassword ? 'border-danger-custom' : ''}
+                  className={step1Error && (password !== confirmPassword || password.length < 6) ? 'border-danger-custom' : ''}
                 />
               </div>
 
@@ -352,16 +392,19 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
               <button
                 type="button"
                 onClick={handleSkipStep2}
-                className="flex-1 h-[40px] sm:h-[42px] border border-border text-text-primary rounded-btn hover:bg-bg-page font-semibold text-[13px] sm:text-[14px] transition-colors duration-150"
+                disabled={isCompleting}
+                className="flex-1 h-[40px] sm:h-[42px] border border-border text-text-primary rounded-btn hover:bg-bg-page font-semibold text-[13px] sm:text-[14px] transition-colors duration-150 disabled:opacity-50"
               >
                 Skip this step
               </button>
               <button
                 type="submit"
-                className="flex-1 h-[40px] sm:h-[42px] bg-primary text-white rounded-btn hover:bg-primary-dark font-semibold text-[13px] sm:text-[14px] flex items-center justify-center gap-1.5 transition-colors duration-150"
+                disabled={isCompleting}
+                className="flex-1 h-[40px] sm:h-[42px] bg-primary text-white rounded-btn hover:bg-primary-dark font-semibold text-[13px] sm:text-[14px] flex items-center justify-center gap-1.5 transition-colors duration-150 disabled:opacity-50"
               >
-                Next
-                <ChevronRight className="w-4 h-4" />
+                {isCompleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isCompleting ? 'Saving...' : 'Next'}
+                {!isCompleting && <ChevronRight className="w-4 h-4" />}
               </button>
             </div>
           </form>
