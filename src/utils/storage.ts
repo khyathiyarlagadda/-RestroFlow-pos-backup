@@ -514,6 +514,20 @@ export const storage = {
     // Sync profiles in the background
     (async () => {
       if (!cache.restaurantId) return;
+
+      // Check if email column exists in profiles table
+      let emailColumnExists = false;
+      try {
+        const { error: columnError } = await supabase.from('profiles').select('email').limit(1);
+        if (!columnError) {
+          emailColumnExists = true;
+        } else if (columnError.code !== 'PGRST100' && !columnError.message.includes('does not exist')) {
+          emailColumnExists = true;
+        }
+      } catch {
+        emailColumnExists = true;
+      }
+
       const { data: existing } = await supabase.from('profiles').select('id').eq('restaurant_id', cache.restaurantId);
       const existingIds = (existing || []).map(e => e.id);
       const newIds = users.map(u => u.id);
@@ -525,15 +539,22 @@ export const storage = {
       }
 
       // Upsert profiles
-      await supabase.from('profiles').upsert(users.map(u => ({
-        id: u.id,
-        restaurant_id: cache.restaurantId,
-        username: u.username,
-        full_name: u.fullName,
-        email: u.email || null,
-        role: u.role,
-        status: u.status
-      })));
+      const upsertData = users.map(u => {
+        const row: any = {
+          id: u.id,
+          restaurant_id: cache.restaurantId,
+          username: u.username,
+          full_name: u.fullName,
+          role: u.role,
+          status: u.status
+        };
+        if (emailColumnExists) {
+          row.email = u.email || null;
+        }
+        return row;
+      });
+
+      await supabase.from('profiles').upsert(upsertData);
     })().catch(console.error);
   },
 

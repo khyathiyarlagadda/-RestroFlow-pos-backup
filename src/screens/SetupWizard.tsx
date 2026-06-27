@@ -128,15 +128,33 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
       if (!authData.user) throw new Error('User registration failed');
 
       // 3. Save profile details
-      const { error: profileError } = await supabase.from('profiles').insert({
+      const profileRow: any = {
         id: authData.user.id,
         username: username.trim(),
         full_name: fullName.trim(),
-        email: adminEmail.trim(),
         role: 'Administrator',
         status: 'active',
         restaurant_id: restaurantId
-      });
+      };
+
+      // Check if email column exists in profiles table
+      let emailColumnExists = false;
+      try {
+        const { error: columnError } = await supabase.from('profiles').select('email').limit(1);
+        if (!columnError) {
+          emailColumnExists = true;
+        } else if (columnError.code !== 'PGRST100' && !columnError.message.includes('does not exist')) {
+          emailColumnExists = true;
+        }
+      } catch {
+        emailColumnExists = true;
+      }
+
+      if (emailColumnExists) {
+        profileRow.email = adminEmail.trim();
+      }
+
+      const { error: profileError } = await supabase.from('profiles').insert(profileRow);
       if (profileError) throw profileError;
 
       // 4. Save settings if not already present

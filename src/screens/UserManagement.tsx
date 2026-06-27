@@ -151,6 +151,19 @@ export const UserManagement: React.FC = () => {
         throw new Error('Restaurant ID not found');
       }
 
+      // Check if email column exists in profiles table
+      let emailColumnExists = false;
+      try {
+        const { error: columnError } = await supabase.from('profiles').select('email').limit(1);
+        if (!columnError) {
+          emailColumnExists = true;
+        } else if (columnError.code !== 'PGRST100' && !columnError.message.includes('does not exist')) {
+          emailColumnExists = true;
+        }
+      } catch {
+        emailColumnExists = true;
+      }
+
       if (editingUser) {
         // 1. If editing own profile and changed password, update it
         if (editingUser.id === currentSession?.userId && password) {
@@ -160,14 +173,18 @@ export const UserManagement: React.FC = () => {
           if (authUpdateError) throw authUpdateError;
         }
 
+        const updateRow: any = {
+          full_name: fullName.trim(),
+          role: userRole
+        };
+        if (emailColumnExists) {
+          updateRow.email = email.trim();
+        }
+
         // 2. Update profiles table
         const { error: profileError } = await supabase
           .from('profiles')
-          .update({
-            full_name: fullName.trim(),
-            email: email.trim(),
-            role: userRole
-          })
+          .update(updateRow)
           .eq('id', editingUser.id);
 
         if (profileError) throw profileError;
@@ -178,7 +195,7 @@ export const UserManagement: React.FC = () => {
             return {
               ...u,
               fullName: fullName.trim(),
-              email: email.trim(),
+              email: emailColumnExists ? email.trim() : undefined,
               role: userRole
             };
           }
@@ -216,16 +233,20 @@ export const UserManagement: React.FC = () => {
         if (authError) throw authError;
         if (!authData.user) throw new Error('Registration failed');
 
-        // Create database profile entry
-        const { error: profileError } = await supabase.from('profiles').insert({
+        const insertRow: any = {
           id: authData.user.id,
           username: username.trim(),
           full_name: fullName.trim(),
-          email: email.trim(),
           role: userRole,
           status: 'active',
           restaurant_id: restaurantId
-        });
+        };
+        if (emailColumnExists) {
+          insertRow.email = email.trim();
+        }
+
+        // Create database profile entry
+        const { error: profileError } = await supabase.from('profiles').insert(insertRow);
 
         if (profileError) throw profileError;
 
@@ -234,7 +255,7 @@ export const UserManagement: React.FC = () => {
           id: authData.user.id,
           username: username.trim(),
           fullName: fullName.trim(),
-          email: email.trim(),
+          email: emailColumnExists ? email.trim() : undefined,
           role: userRole,
           createdDate: new Date().toISOString(),
           status: 'active' as const
