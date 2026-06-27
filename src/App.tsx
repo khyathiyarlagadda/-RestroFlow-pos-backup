@@ -143,7 +143,7 @@ export const App: React.FC = () => {
               path="/login"
               element={
                 session ? (
-                  session.role === 'Restaurant Owner' ? (
+                  session.role === 'Restaurant Owner' || session.role === 'Owner' ? (
                     <Navigate to="/pos" replace />
                   ) : (
                     <Navigate to="/dashboard" replace />
@@ -205,7 +205,7 @@ export const App: React.FC = () => {
                 <Route
                   path="*"
                   element={
-                    session.role === 'Restaurant Owner' ? (
+                    session.role === 'Restaurant Owner' || session.role === 'Owner' ? (
                       <Navigate to="/pos" replace />
                     ) : (
                       <Navigate to="/dashboard" replace />

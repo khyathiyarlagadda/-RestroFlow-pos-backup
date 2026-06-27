@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     username text UNIQUE NOT NULL,
     full_name text NOT NULL,
-    role text NOT NULL CHECK (role IN ('Administrator', 'Restaurant Owner')),
+    email text,
+    role text NOT NULL CHECK (role IN ('Administrator', 'Restaurant Owner', 'Owner', 'Staff')),
     status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
     restaurant_id uuid REFERENCES public.restaurants(id) ON DELETE SET NULL,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -180,4 +181,11 @@ BEGIN
     RETURN EXISTS (SELECT 1 FROM public.restaurants);
 END;
 $$;
+
+-- Alter profiles role constraint to support 'Owner' and 'Staff' on existing instances
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('Administrator', 'Restaurant Owner', 'Owner', 'Staff'));
+
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE public.restaurants ADD COLUMN IF NOT EXISTS logo_url text;
 

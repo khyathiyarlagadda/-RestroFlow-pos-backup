@@ -19,7 +19,7 @@ import {
 import { storage } from '../utils/storage';
 
 interface SidebarProps {
-  userRole: 'Administrator' | 'Restaurant Owner';
+  userRole: 'Administrator' | 'Restaurant Owner' | 'Owner' | 'Staff';
   username: string;
   onLogout: () => void;
 }

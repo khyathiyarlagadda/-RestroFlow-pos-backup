@@ -2,7 +2,8 @@ export interface User {
   id: string;
   username: string;
   fullName: string;
-  role: 'Administrator' | 'Restaurant Owner';
+  email?: string;
+  role: 'Administrator' | 'Restaurant Owner' | 'Owner' | 'Staff';
   createdDate: string;
   status: 'active' | 'inactive';
 }
@@ -10,7 +11,7 @@ export interface User {
 export interface Session {
   userId: string;
   username: string;
-  role: 'Administrator' | 'Restaurant Owner';
+  role: 'Administrator' | 'Restaurant Owner' | 'Owner' | 'Staff';
   loginTime: string;
 }
 

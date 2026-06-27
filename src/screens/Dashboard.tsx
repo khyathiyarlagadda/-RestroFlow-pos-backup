@@ -20,7 +20,7 @@ export const Dashboard: React.FC = () => {
   const [sales, setSales] = useState<SaleInvoice[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [role, setRole] = useState<'Administrator' | 'Restaurant Owner'>('Administrator');
+  const [role, setRole] = useState<'Administrator' | 'Restaurant Owner' | 'Owner' | 'Staff'>('Administrator');
 
   useEffect(() => {
     setSales(storage.getSales());
@@ -180,7 +180,7 @@ export const Dashboard: React.FC = () => {
             Real-time restaurant metrics summary
           </p>
         </div>
-          {role === 'Restaurant Owner' && (
+          {(role === 'Restaurant Owner' || role === 'Owner') && (
             <button
               onClick={() => navigate('/pos')}
               className="h-[36px] bg-primary hover:bg-primary-dark text-white rounded-btn px-4 text-[13px] font-medium flex items-center gap-2 transition-colors duration-150 shadow-card"

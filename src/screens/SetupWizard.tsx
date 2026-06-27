@@ -37,6 +37,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
   // Step 1: Admin account
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [step1Error, setStep1Error] = useState('');
@@ -46,6 +47,8 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
+  const [gstin, setGstin] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
   const [step2Error, setStep2Error] = useState('');
 
   const [isCompleting, setIsCompleting] = useState(false);
@@ -64,6 +67,14 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
     }
     if (!fullName.trim()) {
       setStep1Error('Full name is required');
+      return;
+    }
+    if (!adminEmail.trim()) {
+      setStep1Error('Email is required');
+      return;
+    }
+    if (!adminEmail.trim().includes('@')) {
+      setStep1Error('Invalid email format');
       return;
     }
     if (!password) {
@@ -103,12 +114,11 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
       }
 
       // 1. Create Restaurant
-      const restaurantId = await storage.createRestaurant(nameToUse.trim());
+      const restaurantId = await storage.createRestaurant(nameToUse.trim(), logoUrl.trim() || undefined);
 
       // 2. Sign up Admin Auth
-      const userEmail = username.trim().includes('@') ? username.trim() : `${username.trim()}@restroflow.local`;
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: userEmail,
+        email: adminEmail.trim(),
         password: password,
         options: {
           data: {
@@ -127,6 +137,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
         id: authData.user.id,
         username: username.trim(),
         full_name: fullName.trim(),
+        email: adminEmail.trim(),
         role: 'Administrator',
         status: 'active',
         restaurant_id: restaurantId
@@ -138,7 +149,8 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
         restaurant_id: restaurantId,
         cgst: 0,
         sgst: 0,
-        gst_enabled: false,
+        gst_enabled: !!gstin.trim(),
+        gstin: gstin.trim() || null,
         restaurant_name: nameToUse.trim(),
         address: address.trim(),
         phone: phone.trim(),
@@ -150,7 +162,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
         container_charge_enabled: false,
         default_container_charge: 0,
         show_fields: {
-          gstinOnReceipt: false,
+          gstinOnReceipt: !!gstin.trim(),
           phoneOnReceipt: !!phone.trim(),
           emailOnReceipt: !!email.trim(),
           footerOnReceipt: true
@@ -283,6 +295,18 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
               </div>
 
               <div className="flex flex-col">
+                <label htmlFor="adminEmail" className="input-label-custom">Email address</label>
+                <input
+                  id="adminEmail"
+                  type="email"
+                  placeholder="e.g. admin@restroflow.com"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  className={step1Error && (!adminEmail || !adminEmail.includes('@')) ? 'border-danger-custom' : ''}
+                />
+              </div>
+
+              <div className="flex flex-col">
                 <label htmlFor="password" className="input-label-custom">Password</label>
                 <input
                   id="password"
@@ -377,6 +401,28 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   className="h-16 sm:h-20 py-2 resize-none"
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <label htmlFor="gstin" className="input-label-custom">GSTIN (optional)</label>
+                <input
+                  id="gstin"
+                  type="text"
+                  placeholder="e.g. 22AAAAA0000A1Z5"
+                  value={gstin}
+                  onChange={(e) => setGstin(e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <label htmlFor="logoUrl" className="input-label-custom">Logo URL (optional)</label>
+                <input
+                  id="logoUrl"
+                  type="text"
+                  placeholder="e.g. https://domain.com/logo.png"
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
                 />
               </div>
 

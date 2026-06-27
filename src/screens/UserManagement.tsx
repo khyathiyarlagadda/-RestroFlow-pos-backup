@@ -15,9 +15,10 @@ export const UserManagement: React.FC = () => {
 
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [userRole, setUserRole] = useState<'Administrator' | 'Restaurant Owner'>('Restaurant Owner');
+  const [userRole, setUserRole] = useState<'Administrator' | 'Restaurant Owner' | 'Owner' | 'Staff'>('Owner');
   
   const [formError, setFormError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -48,9 +49,10 @@ export const UserManagement: React.FC = () => {
     setEditingUser(null);
     setUsername('');
     setFullName('');
+    setEmail('');
     setPassword('');
     setConfirmPassword('');
-    setUserRole('Restaurant Owner');
+    setUserRole('Owner');
     setFormError('');
     setShowAddEditModal(true);
   };
@@ -59,6 +61,7 @@ export const UserManagement: React.FC = () => {
     setEditingUser(user);
     setUsername(user.username);
     setFullName(user.fullName);
+    setEmail(user.email || '');
     setPassword('');
     setConfirmPassword('');
     setUserRole(user.role);
@@ -87,6 +90,16 @@ export const UserManagement: React.FC = () => {
         setIsSaving(false);
         return;
       }
+      if (!email.trim()) {
+        setFormError('Email is required');
+        setIsSaving(false);
+        return;
+      }
+      if (!email.trim().includes('@')) {
+        setFormError('Invalid email format');
+        setIsSaving(false);
+        return;
+      }
 
       // Validate passwords
       if (!editingUser) {
@@ -95,8 +108,8 @@ export const UserManagement: React.FC = () => {
           setIsSaving(false);
           return;
         }
-        if (password.length < 4) {
-          setFormError('Password must be at least 4 characters');
+        if (password.length < 6) {
+          setFormError('Password must be at least 6 characters');
           setIsSaving(false);
           return;
         }
@@ -106,8 +119,8 @@ export const UserManagement: React.FC = () => {
           return;
         }
       } else if (editingUser.id === currentSession?.userId && password) {
-        if (password.length < 4) {
-          setFormError('Password must be at least 4 characters');
+        if (password.length < 6) {
+          setFormError('Password must be at least 6 characters');
           setIsSaving(false);
           return;
         }
@@ -152,6 +165,7 @@ export const UserManagement: React.FC = () => {
           .from('profiles')
           .update({
             full_name: fullName.trim(),
+            email: email.trim(),
             role: userRole
           })
           .eq('id', editingUser.id);
@@ -164,6 +178,7 @@ export const UserManagement: React.FC = () => {
             return {
               ...u,
               fullName: fullName.trim(),
+              email: email.trim(),
               role: userRole
             };
           }
@@ -183,7 +198,7 @@ export const UserManagement: React.FC = () => {
         }
       } else {
         // Registering a new cashier/owner
-        const userEmail = username.trim().includes('@') ? username.trim() : `${username.trim()}@restroflow.local`;
+        const userEmail = email.trim();
         
         // Use supabaseSignupClient so standard persisted session isn't logged out
         const { data: authData, error: authError } = await supabaseSignupClient.auth.signUp({
@@ -206,6 +221,7 @@ export const UserManagement: React.FC = () => {
           id: authData.user.id,
           username: username.trim(),
           full_name: fullName.trim(),
+          email: email.trim(),
           role: userRole,
           status: 'active',
           restaurant_id: restaurantId
@@ -218,6 +234,7 @@ export const UserManagement: React.FC = () => {
           id: authData.user.id,
           username: username.trim(),
           fullName: fullName.trim(),
+          email: email.trim(),
           role: userRole,
           createdDate: new Date().toISOString(),
           status: 'active' as const
@@ -418,6 +435,19 @@ export const UserManagement: React.FC = () => {
             />
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="usrEmail">Email *</label>
+            <input
+              id="usrEmail"
+              type="email"
+              placeholder="e.g. user@restroflow.com"
+              value={email}
+              disabled={isSaving}
+              onChange={(e) => setEmail(e.target.value)}
+              className={formError && !email ? 'border-danger-custom' : ''}
+            />
+          </div>
+
           {(!editingUser || editingUser.id === currentSession?.userId) && (
             <>
               <div className="flex flex-col gap-1.5">
@@ -466,8 +496,12 @@ export const UserManagement: React.FC = () => {
               onChange={(e) => setUserRole(e.target.value as any)}
               disabled={editingUser?.id === currentSession?.userId || isSaving}
             >
-              <option value="Administrator">Administrator</option>
-              <option value="Restaurant Owner">Restaurant Owner</option>
+              {(editingUser?.role === 'Administrator' || currentSession?.role === 'Administrator') && (
+                <option value="Administrator">Administrator</option>
+              )}
+              <option value="Owner">Owner</option>
+              <option value="Restaurant Owner">Restaurant Owner (Legacy)</option>
+              <option value="Staff">Staff</option>
             </select>
           </div>
 

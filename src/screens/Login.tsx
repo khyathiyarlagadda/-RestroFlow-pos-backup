@@ -12,7 +12,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'Administrator' | 'Restaurant Owner'>('Administrator');
+  const [role, setRole] = useState<'Administrator' | 'Restaurant Owner' | 'Owner' | 'Staff'>('Administrator');
   
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -70,10 +70,14 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       }
 
       if (profile.role !== role) {
-        await supabase.auth.signOut();
-        setIsLoading(false);
-        setError('Invalid username or password for selected role');
-        return;
+        const isOwnerMatch = (profile.role === 'Owner' || profile.role === 'Restaurant Owner') && 
+                             (role === 'Owner' || role === 'Restaurant Owner');
+        if (!isOwnerMatch) {
+          await supabase.auth.signOut();
+          setIsLoading(false);
+          setError('Invalid username or password for selected role');
+          return;
+        }
       }
 
       if (profile.status === 'inactive') {
@@ -177,7 +181,9 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               className="w-full"
             >
               <option value="Administrator">Administrator</option>
-              <option value="Restaurant Owner">Restaurant Owner</option>
+              <option value="Owner">Owner</option>
+              <option value="Restaurant Owner">Restaurant Owner (Legacy)</option>
+              <option value="Staff">Staff</option>
             </select>
           </div>
 

@@ -139,8 +139,8 @@ export const storage = {
     }
   },
 
-  createRestaurant: async (name: string): Promise<string> => {
-    const { data, error } = await supabase.from('restaurants').insert({ name }).select('id').single();
+  createRestaurant: async (name: string, logoUrl?: string): Promise<string> => {
+    const { data, error } = await supabase.from('restaurants').insert({ name, logo_url: logoUrl || null }).select('id').single();
     if (error) throw error;
     return data.id;
   },
@@ -298,6 +298,7 @@ export const storage = {
       id: u.id,
       username: u.username,
       fullName: u.full_name,
+      email: u.email || undefined,
       role: u.role,
       createdDate: u.created_at,
       status: u.status
@@ -442,6 +443,7 @@ export const storage = {
             id: u.id,
             username: u.username,
             fullName: u.full_name,
+            email: u.email || undefined,
             role: u.role,
             createdDate: u.created_at,
             status: u.status
@@ -509,6 +511,7 @@ export const storage = {
         restaurant_id: cache.restaurantId,
         username: u.username,
         full_name: u.fullName,
+        email: u.email || null,
         role: u.role,
         status: u.status
       })));
