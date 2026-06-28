@@ -106,6 +106,30 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
         return true;
       }
 
+      // 0.1 Check if this email is already registered in the profiles table
+      let emailColumnExists = false;
+      try {
+        const { error: columnError } = await supabase.from('profiles').select('email').limit(1);
+        if (!columnError) {
+          emailColumnExists = true;
+        } else if (columnError.code !== 'PGRST100' && !columnError.message.includes('does not exist')) {
+          emailColumnExists = true;
+        }
+      } catch {
+        emailColumnExists = true;
+      }
+
+      if (emailColumnExists) {
+        const { data: existingEmailProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', adminEmail.trim().toLowerCase())
+          .limit(1);
+        if (existingEmailProfile && existingEmailProfile.length > 0) {
+          throw new Error('An administrator account with this email address already exists. Please log in directly.');
+        }
+      }
+
       let restaurantId = existingRestaurantId;
 
       if (!restaurantId) {
@@ -187,18 +211,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
         restaurant_id: restaurantId
       };
 
-      // Check if email column exists in profiles table
-      let emailColumnExists = false;
-      try {
-        const { error: columnError } = await supabase.from('profiles').select('email').limit(1);
-        if (!columnError) {
-          emailColumnExists = true;
-        } else if (columnError.code !== 'PGRST100' && !columnError.message.includes('does not exist')) {
-          emailColumnExists = true;
-        }
-      } catch {
-        emailColumnExists = true;
-      }
+      // Re-use pre-evaluated emailColumnExists parameter
 
       if (emailColumnExists) {
         profileRow.email = adminEmail.trim();
