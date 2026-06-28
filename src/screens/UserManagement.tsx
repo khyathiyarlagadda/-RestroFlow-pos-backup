@@ -215,17 +215,18 @@ export const UserManagement: React.FC = () => {
         }
       } else {
         // Registering a new cashier/owner
-        const userEmail = email.trim();
+        const derivedAuthEmail = `${username.trim().toLowerCase()}@restroflow.local`;
         
         // Use supabaseSignupClient so standard persisted session isn't logged out
         const { data: authData, error: authError } = await supabaseSignupClient.auth.signUp({
-          email: userEmail,
+          email: derivedAuthEmail,
           password: password,
           options: {
             data: {
               full_name: fullName.trim(),
               role: userRole,
-              username: username.trim()
+              username: username.trim(),
+              contact_email: email.trim()
             }
           }
         });

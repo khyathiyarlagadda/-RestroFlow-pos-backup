@@ -112,14 +112,16 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
       }
 
       // 2. Sign up Admin Auth
+      const derivedAuthEmail = `${username.trim().toLowerCase()}@restroflow.local`;
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: adminEmail.trim(),
+        email: derivedAuthEmail,
         password: password,
         options: {
           data: {
             full_name: fullName.trim(),
             role: 'Administrator',
-            username: username.trim()
+            username: username.trim(),
+            contact_email: adminEmail.trim()
           }
         }
       });
