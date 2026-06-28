@@ -133,9 +133,25 @@ export const App: React.FC = () => {
   return (
     <HashRouter>
       <Routes>
-        {/* If no users exist, force setup wizard */}
+        {/* If no users exist, force setup wizard unless they navigate to login directly */}
         {!hasUsers ? (
-          <Route path="*" element={<SetupWizard onSetupComplete={checkInitialState} />} />
+          <>
+            <Route
+              path="/login"
+              element={
+                session ? (
+                  session.role === 'Restaurant Owner' || session.role === 'Owner' ? (
+                    <Navigate to="/pos" replace />
+                  ) : (
+                    <Navigate to="/dashboard" replace />
+                  )
+                ) : (
+                  <Login onLoginSuccess={handleLoginSuccess} />
+                )
+              }
+            />
+            <Route path="*" element={<SetupWizard onSetupComplete={checkInitialState} />} />
+          </>
         ) : (
           <>
             {/* Setup Wizard direct path */}
