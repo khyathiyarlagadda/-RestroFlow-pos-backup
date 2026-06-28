@@ -42,9 +42,22 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setIsLoading(true);
 
     try {
-      const email = username.trim().includes('@') ? username.trim() : `${username.trim()}@restroflow.local`;
+      let derivedEmail = username.trim();
+      if (!derivedEmail.includes('@')) {
+        try {
+          const { data: dbEmail, error: rpcError } = await supabase.rpc('get_user_email', { p_username: derivedEmail });
+          if (!rpcError && dbEmail) {
+            derivedEmail = dbEmail;
+          } else {
+            derivedEmail = `${derivedEmail}@restroflow.local`;
+          }
+        } catch {
+          derivedEmail = `${derivedEmail}@restroflow.local`;
+        }
+      }
+
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
+        email: derivedEmail,
         password
       });
 

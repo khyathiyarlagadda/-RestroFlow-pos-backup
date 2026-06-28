@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     username text UNIQUE NOT NULL,
     full_name text NOT NULL,
     email text,
-    role text NOT NULL CHECK (role IN ('Administrator', 'Restaurant Owner', 'Owner', 'Staff')),
+    role text NOT NULL CHECK (role IN ('Administrator', 'Restaurant Owner'))),
     status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
     restaurant_id uuid REFERENCES public.restaurants(id) ON DELETE SET NULL,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -199,4 +199,15 @@ ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('
 
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email text;
 ALTER TABLE public.restaurants ADD COLUMN IF NOT EXISTS logo_url text;
+
+-- Helper function to lookup user email by username (bypasses RLS safely if needed)
+CREATE OR REPLACE FUNCTION public.get_user_email(p_username text)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN (SELECT email FROM public.profiles WHERE username = p_username LIMIT 1);
+END;
+$$;
 
