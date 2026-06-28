@@ -493,7 +493,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
                 <input
                   id="adminEmail"
                   type="email"
-                  placeholder="e.g. admin@restroflow.com"
+                  placeholder="e.g. admin@gmail.com"
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
                   className={step2Error && (!adminEmail || !adminEmail.includes('@')) ? 'border-danger-custom' : ''}

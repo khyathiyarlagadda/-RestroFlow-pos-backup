@@ -214,19 +214,18 @@ export const UserManagement: React.FC = () => {
           setCurrentSession(newSession);
         }
       } else {
-        // Registering a new cashier/owner
-        const derivedAuthEmail = `${username.trim().toLowerCase()}@restroflow.com`;
+        // Registering a new cashier/owner using their actual email address
+        const targetEmail = email.trim().toLowerCase();
         
         // Use supabaseSignupClient so standard persisted session isn't logged out
         const { data: authData, error: authError } = await supabaseSignupClient.auth.signUp({
-          email: derivedAuthEmail,
+          email: targetEmail,
           password: password,
           options: {
             data: {
               full_name: fullName.trim(),
               role: userRole,
-              username: username.trim(),
-              contact_email: email.trim()
+              username: username.trim()
             }
           }
         });
@@ -462,7 +461,7 @@ export const UserManagement: React.FC = () => {
             <input
               id="usrEmail"
               type="email"
-              placeholder="e.g. user@restroflow.com"
+              placeholder="e.g. user@gmail.com"
               value={email}
               disabled={isSaving}
               onChange={(e) => setEmail(e.target.value)}

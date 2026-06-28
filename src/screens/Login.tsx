@@ -49,10 +49,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           if (!rpcError && dbEmail) {
             derivedEmail = dbEmail;
           } else {
-            derivedEmail = `${derivedEmail}@restroflow.com`;
+            throw new Error('Username lookup failed. Please enter your email address to log in.');
           }
-        } catch {
-          derivedEmail = `${derivedEmail}@restroflow.com`;
+        } catch (err: any) {
+          throw new Error(err.message || 'Username lookup failed. Please enter your email address to log in.');
         }
       }
 
