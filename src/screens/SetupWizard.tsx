@@ -122,26 +122,59 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
       let userId = registeredUserId;
 
       if (!userId) {
-        // 2. Sign up Admin Auth
-        const derivedAuthEmail = `${username.trim().toLowerCase()}@restroflow.com`;
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: derivedAuthEmail,
-          password: password,
-          options: {
-            data: {
-              full_name: fullName.trim(),
-              role: 'Administrator',
-              username: username.trim(),
-              contact_email: adminEmail.trim()
-            }
+        // Use the actual administrator email entered by the user
+        const targetEmail = adminEmail.trim().toLowerCase();
+
+        // Pre-signin check to see if this user already exists in Auth (prevents duplicate signups and rate limit hits)
+        try {
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: targetEmail,
+            password: password
+          });
+          
+          if (!signInError && signInData?.user) {
+            console.log("[RestroFlow] Admin user already authenticated. Reusing ID:", signInData.user.id);
+            userId = signInData.user.id;
+            setRegisteredUserId(userId);
           }
-        });
+        } catch (signInErr) {
+          console.warn("[RestroFlow] Pre-signin check failed:", signInErr);
+        }
 
-        if (authError) throw authError;
-        if (!authData.user) throw new Error('User registration failed');
+        if (!userId) {
+          // 2. Sign up Admin Auth
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: targetEmail,
+            password: password,
+            options: {
+              data: {
+                full_name: fullName.trim(),
+                role: 'Administrator',
+                username: username.trim()
+              }
+            }
+          });
 
-        userId = authData.user.id;
-        setRegisteredUserId(userId);
+          if (authError && (authError.message.includes('already registered') || authError.message.includes('already exists'))) {
+            // Try to sign in to authenticate and retrieve user ID
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: targetEmail,
+              password: password
+            });
+            if (signInError) {
+              throw new Error(`User is already registered, but authentication failed: ${signInError.message}`);
+            }
+            if (!signInData.user) throw new Error('User is already registered, but authentication failed.');
+            userId = signInData.user.id;
+            setRegisteredUserId(userId);
+          } else {
+            if (authError) throw authError;
+            if (!authData.user) throw new Error('User registration failed');
+
+            userId = authData.user.id;
+            setRegisteredUserId(userId);
+          }
+        }
       }
 
       // 3. Save profile details
@@ -267,7 +300,13 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
 
     const success = await runDatabaseSetup();
     if (success) {
-      setStep(3);
+      try {
+        await onSetupComplete();
+        navigate('/login');
+      } catch (err: any) {
+        console.error(err);
+        setStep2Error(err.message || 'An error occurred while completing setup');
+      }
     }
   };
 

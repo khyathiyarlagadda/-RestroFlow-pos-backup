@@ -77,23 +77,9 @@ let cache: StorageCache = {
   restaurantId: null
 };
 
-// Local storage session key for safety across refreshes
-const AUTH_KEY = 'restroflow_auth';
+// In-memory cache is used for active session state.
+// Master session state is managed entirely by Supabase Auth Client.
 const REST_KEY = 'restroflow_restaurant_id';
-
-// Initialize session from local storage if any
-try {
-  const savedAuth = localStorage.getItem(AUTH_KEY);
-  if (savedAuth) {
-    cache.auth = JSON.parse(savedAuth);
-  }
-  const savedRestId = localStorage.getItem(REST_KEY);
-  if (savedRestId) {
-    cache.restaurantId = savedRestId;
-  }
-} catch (e) {
-  console.error("Failed to load session from localStorage", e);
-}
 
 // Generate unique IDs (fallback)
 export function generateId(): string {
@@ -508,17 +494,10 @@ export const storage = {
   getAuth: (): Session | null => cache.auth,
   setAuth: (session: Session | null) => {
     cache.auth = session;
-    if (session) {
-      localStorage.setItem(AUTH_KEY, JSON.stringify(session));
-    } else {
-      localStorage.removeItem(AUTH_KEY);
-    }
   },
   clearAuth: () => {
     cache.auth = null;
     cache.restaurantId = null;
-    localStorage.removeItem(AUTH_KEY);
-    localStorage.removeItem(REST_KEY);
     supabase.auth.signOut().then();
     supabase.removeAllChannels();
   },

@@ -63,7 +63,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
       if (authError) {
         setIsLoading(false);
-        setError('Invalid username or password for selected role');
+        setError('Invalid username, email or password for selected role');
         setUsernameError(true);
         setPasswordError(true);
         return;
@@ -172,7 +172,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         if (!isOwnerMatch) {
           await supabase.auth.signOut();
           setIsLoading(false);
-          setError('Invalid username or password for selected role');
+          setError('Invalid username, email or password for selected role');
           return;
         }
       }
@@ -231,11 +231,11 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         {/* Login Form */}
         <form onSubmit={handleLogin} className="flex flex-col gap-5">
           <div className="flex flex-col">
-            <label htmlFor="username" className="input-label-custom">Username</label>
+            <label htmlFor="username" className="input-label-custom">Username or Email</label>
             <input
               id="username"
               type="text"
-              placeholder="Enter your username"
+              placeholder="Enter your username or email"
               value={username}
               disabled={isLoading}
               onChange={(e) => setUsername(e.target.value)}
