@@ -20,7 +20,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
-  const [gstin, setGstin] = useState('');
+  const gstin = '';
   const [logoUrl, setLogoUrl] = useState('');
   const [step1Error, setStep1Error] = useState('');
 
@@ -376,27 +376,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
                 />
               </div>
 
-              <div className="flex flex-col">
-                <label htmlFor="gstin" className="input-label-custom">GSTIN (optional)</label>
-                <input
-                  id="gstin"
-                  type="text"
-                  placeholder="e.g. 22AAAAA0000A1Z5"
-                  value={gstin}
-                  onChange={(e) => setGstin(e.target.value)}
-                />
-              </div>
 
-              <div className="flex flex-col">
-                <label htmlFor="logoUrl" className="input-label-custom">Logo URL (optional)</label>
-                <input
-                  id="logoUrl"
-                  type="text"
-                  placeholder="e.g. https://domain.com/logo.png"
-                  value={logoUrl}
-                  onChange={(e) => setLogoUrl(e.target.value)}
-                />
-              </div>
 
               {step1Error && (
                 <span className="text-[13px] text-danger-custom font-semibold mt-1 sentence-case">
