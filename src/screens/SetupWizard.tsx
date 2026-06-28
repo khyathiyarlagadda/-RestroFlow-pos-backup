@@ -33,6 +33,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
   const [step2Error, setStep2Error] = useState('');
 
   const [isCompleting, setIsCompleting] = useState(false);
+  const [registeredUserId, setRegisteredUserId] = useState<string | null>(null);
 
   // Redirect to login if a restaurant already exists AND at least one Administrator exists
   useEffect(() => {
@@ -98,10 +99,17 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
     setIsCompleting(true);
     setStep2Error('');
     try {
+      // 0. Check if an administrator already exists in the database
+      const adminExists = await storage.hasAnyAdmin();
+      if (adminExists) {
+        console.warn("[RestroFlow] Administrator already exists in database. Skipping creation.");
+        return true;
+      }
+
       let restaurantId = existingRestaurantId;
 
       if (!restaurantId) {
-        // 0. Double check if a restaurant already exists to prevent duplicate creations
+        // Double check if a restaurant already exists to prevent duplicate creations
         const exists = await storage.hasAnyRestaurant();
         if (exists) {
           throw new Error('A restaurant configuration already exists in the database. Please reload the app or go to the login page.');
@@ -111,27 +119,34 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onSetupComplete }) => 
         restaurantId = await storage.createRestaurant(restaurantName.trim(), logoUrl.trim() || undefined);
       }
 
-      // 2. Sign up Admin Auth
-      const derivedAuthEmail = `${username.trim().toLowerCase()}@restroflow.com`;
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: derivedAuthEmail,
-        password: password,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-            role: 'Administrator',
-            username: username.trim(),
-            contact_email: adminEmail.trim()
-          }
-        }
-      });
+      let userId = registeredUserId;
 
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('User registration failed');
+      if (!userId) {
+        // 2. Sign up Admin Auth
+        const derivedAuthEmail = `${username.trim().toLowerCase()}@restroflow.com`;
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: derivedAuthEmail,
+          password: password,
+          options: {
+            data: {
+              full_name: fullName.trim(),
+              role: 'Administrator',
+              username: username.trim(),
+              contact_email: adminEmail.trim()
+            }
+          }
+        });
+
+        if (authError) throw authError;
+        if (!authData.user) throw new Error('User registration failed');
+
+        userId = authData.user.id;
+        setRegisteredUserId(userId);
+      }
 
       // 3. Save profile details
       const profileRow: any = {
-        id: authData.user.id,
+        id: userId,
         username: username.trim(),
         full_name: fullName.trim(),
         role: 'Administrator',
