@@ -159,7 +159,25 @@ export const storage = {
   },
 
   createRestaurant: async (name: string, logoUrl?: string): Promise<string> => {
-    const { data, error } = await supabase.from('restaurants').insert({ name, logo_url: logoUrl || null }).select('id').single();
+    // Check if logo_url exists in restaurants table
+    let logoUrlColumnExists = false;
+    try {
+      const { error: columnError } = await supabase.from('restaurants').select('logo_url').limit(1);
+      if (!columnError) {
+        logoUrlColumnExists = true;
+      } else if (columnError.code !== 'PGRST100' && !columnError.message.includes('does not exist')) {
+        logoUrlColumnExists = true;
+      }
+    } catch {
+      logoUrlColumnExists = true;
+    }
+
+    const insertRow: any = { name };
+    if (logoUrlColumnExists && logoUrl) {
+      insertRow.logo_url = logoUrl;
+    }
+
+    const { data, error } = await supabase.from('restaurants').insert(insertRow).select('id').single();
     if (error) throw error;
     return data.id;
   },
