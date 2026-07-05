@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Edit2, Trash2, ShieldAlert, Shield, Loader2 } from 'lucide-react';
+import { Edit2, Trash2, ShieldAlert, Shield, Loader2 } from 'lucide-react';
 import { storage } from '../utils/storage';
 import { Modal } from '../components/Modal';
-import { supabase, supabaseSignupClient } from '../utils/supabaseClient';
+import { supabase } from '../utils/supabaseClient';
 
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -45,17 +45,7 @@ export const UserManagement: React.FC = () => {
     };
   }, []);
 
-  const handleOpenAdd = () => {
-    setEditingUser(null);
-    setUsername('');
-    setFullName('');
-    setEmail('');
-    setPassword('');
-    setConfirmPassword('');
-    setUserRole('Owner');
-    setFormError('');
-    setShowAddEditModal(true);
-  };
+
 
   const handleOpenEdit = (user: any) => {
     setEditingUser(user);
@@ -214,55 +204,9 @@ export const UserManagement: React.FC = () => {
           setCurrentSession(newSession);
         }
       } else {
-        // Registering a new cashier/owner using their actual email address
-        const targetEmail = email.trim().toLowerCase();
-        
-        // Use supabaseSignupClient so standard persisted session isn't logged out
-        const { data: authData, error: authError } = await supabaseSignupClient.auth.signUp({
-          email: targetEmail,
-          password: password,
-          options: {
-            data: {
-              full_name: fullName.trim(),
-              role: userRole,
-              username: username.trim()
-            }
-          }
-        });
-
-        if (authError) throw authError;
-        if (!authData.user) throw new Error('Registration failed');
-
-        const insertRow: any = {
-          id: authData.user.id,
-          username: username.trim(),
-          full_name: fullName.trim(),
-          role: userRole,
-          status: 'active',
-          restaurant_id: restaurantId
-        };
-        if (emailColumnExists) {
-          insertRow.email = email.trim();
-        }
-
-        // Create database profile entry
-        const { error: profileError } = await supabase.from('profiles').insert(insertRow);
-
-        if (profileError) throw profileError;
-
-        // Update local cache
-        const newUser = {
-          id: authData.user.id,
-          username: username.trim(),
-          fullName: fullName.trim(),
-          email: emailColumnExists ? email.trim() : undefined,
-          role: userRole,
-          createdDate: new Date().toISOString(),
-          status: 'active' as const
-        };
-        const updated = [...currentUsers, newUser];
-        storage.setUsers(updated);
-        setUsers(updated);
+        // Registration from frontend is disabled
+        setIsSaving(false);
+        return;
       }
 
       setShowAddEditModal(false);
@@ -340,13 +284,6 @@ export const UserManagement: React.FC = () => {
             Manage system access permissions and credentials
           </p>
         </div>
-          <button
-            onClick={handleOpenAdd}
-            className="h-[36px] bg-primary hover:bg-primary-dark text-white rounded-btn px-4 text-[13px] font-medium flex items-center gap-1.5 transition-colors duration-150 shadow-card"
-          >
-            <UserPlus className="w-4 h-4" />
-            Add user
-          </button>
         </div>
 
         {/* Users Table */}

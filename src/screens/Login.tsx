@@ -74,96 +74,12 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       }
 
       // Fetch profile to verify role and status
-      let profile = await storage.getUserProfile(authData.user.id);
+      const profile = await storage.getUserProfile(authData.user.id);
       if (!profile) {
-        try {
-          // Get or create restaurant
-          let restaurantId = '';
-          const { data: restData } = await supabase.from('restaurants').select('id').limit(1);
-          if (restData && restData.length > 0) {
-            restaurantId = restData[0].id;
-          } else {
-            const { data: newRest, error: restError } = await supabase
-              .from('restaurants')
-              .insert({ name: 'My Restaurant' })
-              .select('id')
-              .single();
-            if (restError) throw restError;
-            restaurantId = newRest.id;
-          }
-
-          // Check if email column exists in profiles table
-          let emailColumnExists = false;
-          try {
-            const { error: columnError } = await supabase.from('profiles').select('email').limit(1);
-            if (!columnError) {
-              emailColumnExists = true;
-            } else if (columnError.code !== 'PGRST100' && !columnError.message.includes('does not exist')) {
-              emailColumnExists = true;
-            }
-          } catch {
-            emailColumnExists = true;
-          }
-
-          // Derive username and full name from user_metadata or email
-          const meta = authData.user.user_metadata || {};
-          const usernameVal = meta.username || authData.user.email?.split('@')[0] || 'admin';
-          const fullNameVal = meta.full_name || 'Administrator';
-          const roleVal = meta.role || 'Administrator';
-
-          const insertRow: any = {
-            id: authData.user.id,
-            username: usernameVal,
-            full_name: fullNameVal,
-            role: roleVal,
-            status: 'active',
-            restaurant_id: restaurantId
-          };
-          if (emailColumnExists && authData.user.email) {
-            insertRow.email = authData.user.email;
-          }
-
-          const { error: insertError } = await supabase.from('profiles').insert(insertRow);
-          if (insertError) throw insertError;
-
-          // Seed settings if missing
-          const { data: existingSettings } = await supabase
-            .from('system_settings')
-            .select('id')
-            .eq('restaurant_id', restaurantId)
-            .maybeSingle();
-
-          if (!existingSettings) {
-            await supabase.from('system_settings').insert({
-              restaurant_id: restaurantId,
-              cgst: 0,
-              sgst: 0,
-              gst_enabled: false,
-              restaurant_name: 'My Restaurant',
-              currency: '₹',
-              footer_message: 'Thank you for dining with us!',
-              print_type: 'Thermal',
-              auto_print: true,
-              container_charge_enabled: false,
-              default_container_charge: 0,
-              show_fields: {
-                gstinOnReceipt: false,
-                phoneOnReceipt: false,
-                emailOnReceipt: false,
-                footerOnReceipt: true
-              }
-            });
-          }
-
-          // Fetch the newly created profile
-          profile = await storage.getUserProfile(authData.user.id);
-        } catch (createErr: any) {
-          console.error("Failed to auto-create profile:", createErr);
-          await supabase.auth.signOut();
-          setIsLoading(false);
-          setError(`User profile not found and auto-creation failed: ${createErr.message}`);
-          return;
-        }
+        await supabase.auth.signOut();
+        setIsLoading(false);
+        setError('User profile not found');
+        return;
       }
 
       if (profile.role !== role) {

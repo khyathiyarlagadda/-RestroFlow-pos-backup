@@ -7,7 +7,6 @@ import { Sidebar } from './components/Sidebar';
 
 
 // Screens
-import { SetupWizard } from './screens/SetupWizard';
 import { Login } from './screens/Login';
 import { POSBilling } from './screens/POSBilling';
 import { Dashboard } from './screens/Dashboard';
@@ -39,7 +38,6 @@ const AppLayout: React.FC<{ session: Session; onLogout: () => void }> = ({ sessi
 
 export const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
-  const [hasUsers, setHasUsers] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
   const [isConfigured, setIsConfigured] = useState<boolean>(true);
 
@@ -54,20 +52,6 @@ export const App: React.FC = () => {
       setIsConfigured(configured);
 
       if (!configured) {
-        setLoading(false);
-        return;
-      }
-
-      // Check if any restaurant exists in database
-      const hasRestaurant = await storage.hasAnyRestaurant();
-      const hasAdmin = hasRestaurant ? await storage.hasAnyAdmin() : false;
-
-      const hasRestaurantAndAdmin = hasRestaurant && hasAdmin;
-      console.log("[RestroFlow] Restaurant detected in Supabase:", hasRestaurant, "Admin detected:", hasAdmin);
-      setHasUsers(hasRestaurantAndAdmin);
-
-      if (!hasRestaurantAndAdmin) {
-        setSession(null);
         setLoading(false);
         return;
       }
@@ -98,7 +82,6 @@ export const App: React.FC = () => {
       }
     } catch (e) {
       console.error("Initialization error:", e);
-      setHasUsers(false);
       setSession(null);
     } finally {
       setLoading(false);
@@ -133,110 +116,84 @@ export const App: React.FC = () => {
   return (
     <HashRouter>
       <Routes>
-        {/* If no users exist, force setup wizard unless they navigate to login directly */}
-        {!hasUsers ? (
-          <>
-            <Route
-              path="/login"
-              element={
-                session ? (
-                  session.role === 'Restaurant Owner' || session.role === 'Owner' ? (
-                    <Navigate to="/pos" replace />
-                  ) : (
-                    <Navigate to="/dashboard" replace />
-                  )
-                ) : (
-                  <Login onLoginSuccess={handleLoginSuccess} />
-                )
-              }
-            />
-            <Route path="*" element={<SetupWizard onSetupComplete={checkInitialState} />} />
-          </>
-        ) : (
-          <>
-            {/* Setup Wizard direct path */}
-            <Route path="/setup" element={<Navigate to="/login" replace />} />
-
-            {/* Login Route */}
-            <Route
-              path="/login"
-              element={
-                session ? (
-                  session.role === 'Restaurant Owner' || session.role === 'Owner' ? (
-                    <Navigate to="/pos" replace />
-                  ) : (
-                    <Navigate to="/dashboard" replace />
-                  )
-                ) : (
-                  <Login onLoginSuccess={handleLoginSuccess} />
-                )
-              }
-            />
-
-            {/* Protected Routes Wrapper */}
-            {session ? (
-              <Route element={<AppLayout session={session} onLogout={handleLogout} />}>
-                {/* Dashboard */}
-                <Route path="/dashboard" element={<Dashboard />} />
-
-                {/* POS Billing */}
-                <Route path="/pos" element={<POSBilling />} />
-
-                {/* Menu items */}
-                <Route path="/menu" element={<MenuManagement />} />
-
-
-                {/* Inventory (Admin & Owner) */}
-                <Route path="/inventory" element={<Inventory />} />
-
-                {/* Tables (Admin & Owner) */}
-                <Route path="/tables" element={<Tables />} />
-
-                {/* KOT: KOT maps for admin, Orders maps for owner */}
-                <Route path="/kot" element={<KOTScreen />} />
-                <Route path="/orders" element={<KOTScreen />} />
-
-                {/* Reports (Admin & Owner) */}
-                <Route path="/reports" element={<Reports />} />
-
-                {/* Customers (Admin & Owner) */}
-                <Route path="/customers" element={<Customers />} />
-
-                {/* Sales History (Admin & Owner) */}
-                <Route path="/sales-history" element={<SalesHistory />} />
-
-                {/* User management (Admin only) */}
-                <Route
-                  path="/users"
-                  element={
-                    session.role === 'Administrator' ? (
-                      <UserManagement />
-                    ) : (
-                      <Navigate to="/pos" replace />
-                    )
-                  }
-                />
-
-                {/* Settings */}
-                <Route path="/settings" element={<SettingsScreen />} />
-
-                {/* Fallback route */}
-                <Route
-                  path="*"
-                  element={
-                    session.role === 'Restaurant Owner' || session.role === 'Owner' ? (
-                      <Navigate to="/pos" replace />
-                    ) : (
-                      <Navigate to="/dashboard" replace />
-                    )
-                  }
-                />
-              </Route>
+        {/* Login Route */}
+        <Route
+          path="/login"
+          element={
+            session ? (
+              session.role === 'Restaurant Owner' || session.role === 'Owner' ? (
+                <Navigate to="/pos" replace />
+              ) : (
+                <Navigate to="/dashboard" replace />
+              )
             ) : (
-              // If not authenticated, redirect to Login
-              <Route path="*" element={<Navigate to="/login" replace />} />
-            )}
-          </>
+              <Login onLoginSuccess={handleLoginSuccess} />
+            )
+          }
+        />
+
+        {/* Protected Routes Wrapper */}
+        {session ? (
+          <Route element={<AppLayout session={session} onLogout={handleLogout} />}>
+            {/* Dashboard */}
+            <Route path="/dashboard" element={<Dashboard />} />
+
+            {/* POS Billing */}
+            <Route path="/pos" element={<POSBilling />} />
+
+            {/* Menu items */}
+            <Route path="/menu" element={<MenuManagement />} />
+
+
+            {/* Inventory (Admin & Owner) */}
+            <Route path="/inventory" element={<Inventory />} />
+
+            {/* Tables (Admin & Owner) */}
+            <Route path="/tables" element={<Tables />} />
+
+            {/* KOT: KOT maps for admin, Orders maps for owner */}
+            <Route path="/kot" element={<KOTScreen />} />
+            <Route path="/orders" element={<KOTScreen />} />
+
+            {/* Reports (Admin & Owner) */}
+            <Route path="/reports" element={<Reports />} />
+
+            {/* Customers (Admin & Owner) */}
+            <Route path="/customers" element={<Customers />} />
+
+            {/* Sales History (Admin & Owner) */}
+            <Route path="/sales-history" element={<SalesHistory />} />
+
+            {/* User management (Admin only) */}
+            <Route
+              path="/users"
+              element={
+                session.role === 'Administrator' ? (
+                  <UserManagement />
+                ) : (
+                  <Navigate to="/pos" replace />
+                )
+              }
+            />
+
+            {/* Settings */}
+            <Route path="/settings" element={<SettingsScreen />} />
+
+            {/* Fallback route */}
+            <Route
+              path="*"
+              element={
+                session.role === 'Restaurant Owner' || session.role === 'Owner' ? (
+                  <Navigate to="/pos" replace />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
+              }
+            />
+          </Route>
+        ) : (
+          // If not authenticated, redirect to Login
+          <Route path="*" element={<Navigate to="/login" replace />} />
         )}
       </Routes>
     </HashRouter>

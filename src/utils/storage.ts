@@ -95,43 +95,7 @@ export const storage = {
   // Cache check/initialization helpers
   getRestaurantId: () => cache.restaurantId,
 
-  hasAnyRestaurant: async (): Promise<boolean> => {
-    try {
-      // 1. Try calling the public.has_restaurant() RPC function first
-      // This bypasses RLS safely using SECURITY DEFINER on the Supabase side
-      const { data, error } = await supabase.rpc('has_restaurant');
-      if (!error && typeof data === 'boolean') {
-        return data;
-      }
-      
-      // 2. Fallback to standard SELECT query if RPC function is missing or fails
-      const { data: selectData, error: selectError } = await supabase.from('restaurants').select('id').limit(1);
-      if (selectError) throw selectError;
-      return !!(selectData && selectData.length > 0);
-    } catch (e) {
-      console.error("Error checking if restaurants exist:", e);
-      return false;
-    }
-  },
 
-  hasAnyAdmin: async (): Promise<boolean> => {
-    try {
-      // 1. Try calling the public.has_admin() RPC function first
-      // This bypasses RLS safely using SECURITY DEFINER on the Supabase side
-      const { data, error } = await supabase.rpc('has_admin');
-      if (!error && typeof data === 'boolean') {
-        return data;
-      }
-      
-      // 2. Fallback to standard SELECT query if RPC function is missing or fails
-      const { data: selectData, error: selectError } = await supabase.from('profiles').select('id').eq('role', 'Administrator').limit(1);
-      if (selectError) throw selectError;
-      return !!(selectData && selectData.length > 0);
-    } catch (e) {
-      console.error("Error checking if administrator profiles exist:", e);
-      return false;
-    }
-  },
 
   getUserProfile: async (userId: string): Promise<any | null> => {
     try {
