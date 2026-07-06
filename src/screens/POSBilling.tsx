@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import {
   Search,
   Plus,
@@ -15,7 +16,6 @@ import { storage } from '../utils/storage';
 import type {
   Category,
   MenuItem,
-  Variation,
   Table,
   Customer,
   CartItem,
@@ -86,7 +86,6 @@ export const POSBilling: React.FC = () => {
   // Variation Modal
   const [showVariationModal, setShowVariationModal] = useState(false);
   const [activeItemForVariation, setActiveItemForVariation] = useState<MenuItem | null>(null);
-  const [selectedVariation, setSelectedVariation] = useState<Variation | null>(null);
 
   // Payment State
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(
@@ -96,7 +95,6 @@ export const POSBilling: React.FC = () => {
   // Print Receipt View
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [currentInvoice, setCurrentInvoice] = useState<SaleInvoice | null>(null);
-  const [triggerPrint, setTriggerPrint] = useState(false);
 
   // --- INITIAL LOADING ---
   useEffect(() => {
@@ -340,41 +338,7 @@ export const POSBilling: React.FC = () => {
     );
   };
 
-  // Synchronized browser print trigger after DOM commit
-  useEffect(() => {
-    if (triggerPrint && currentInvoice) {
-      const customerItemsContainer = document.getElementById('print-customer-items');
-      const kotItemsContainer = document.getElementById('print-kot-items');
 
-      const needsCustomer = printSelection === 'customer' || printSelection === 'both';
-      const needsKOT = printSelection === 'kot' || printSelection === 'both';
-
-      let customerRendered = !needsCustomer;
-      let kotRendered = !needsKOT;
-
-      if (needsCustomer && customerItemsContainer && customerItemsContainer.children.length > 0) {
-        customerRendered = true;
-      }
-      if (needsKOT && kotItemsContainer && kotItemsContainer.children.length > 0) {
-        kotRendered = true;
-      }
-
-      if (customerRendered && kotRendered) {
-        setTriggerPrint(false);
-        const timer = setTimeout(() => {
-          console.log("PRINT ORDER", currentInvoice);
-          window.print();
-        }, 300);
-        return () => clearTimeout(timer);
-      } else {
-        const timer = setTimeout(() => {
-          // Trigger a state refresh to re-evaluate the DOM
-          setRefreshTrigger((prev) => prev + 1);
-        }, 50);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [triggerPrint, currentInvoice, printSelection, refreshTrigger]);
 
   // Load cart from table if table selection changes (Dine In)
   useEffect(() => {
@@ -538,7 +502,6 @@ export const POSBilling: React.FC = () => {
   const handleAddItem = (item: MenuItem) => {
     if (item.hasVariations) {
       setActiveItemForVariation(item);
-      setSelectedVariation(item.variations[0] || null);
       setShowVariationModal(true);
     } else {
       addToCart(item.id, item.name, item.basePrice);
@@ -618,19 +581,7 @@ export const POSBilling: React.FC = () => {
     setShowCustomerModal(false);
   };
 
-  const handleVariationSubmit = () => {
-    if (activeItemForVariation && selectedVariation) {
-      addToCart(
-        activeItemForVariation.id,
-        activeItemForVariation.name,
-        selectedVariation.price,
-        selectedVariation.name
-      );
-      setShowVariationModal(false);
-      setActiveItemForVariation(null);
-      setSelectedVariation(null);
-    }
-  };
+
 
   // KOT button click
   const handleKOT = () => {
@@ -850,18 +801,20 @@ export const POSBilling: React.FC = () => {
     }
 
     // Set invoice and open receipt modal
-    setCurrentInvoice(newInvoice);
-    setCart([]);
-    setDiscount(0);
-    setTips(0);
-    setContainerCharge(0);
-    setCurrentTokenNo(''); // Reset Token Number for next order
-    setPaymentMethod((storage.getSettings().defaultPaymentMethod as PaymentMethod) || 'Cash'); // Reset payment method to configured default
+    flushSync(() => {
+      setCurrentInvoice(newInvoice);
+      setCart([]);
+      setDiscount(0);
+      setTips(0);
+      setContainerCharge(0);
+      setCurrentTokenNo(''); // Reset Token Number for next order
+      setPaymentMethod((storage.getSettings().defaultPaymentMethod as PaymentMethod) || 'Cash'); // Reset payment method to configured default
+    });
 
     if (shouldPrint) {
       setPrintSelection('both');
-      setTriggerPrint(true); // Trigger synchronized printing in background
-      setShowReceiptModal(false); // Do NOT show preview modal automatically
+      console.log("SYNCHRONOUS PRINT TRIGGER", newInvoice);
+      window.print();
     } else {
       alert(`Token Number ${tokenNo.split('-').pop()} generated successfully!`);
     }
@@ -1377,12 +1330,17 @@ export const POSBilling: React.FC = () => {
                 <button
                   key={v.name}
                   type="button"
-                  onClick={() => setSelectedVariation(v)}
-                  className={`flex justify-between items-center px-4 py-3 text-left w-full hover:bg-primary/5 transition-all duration-150 ${
-                    selectedVariation?.name === v.name
-                      ? 'bg-primary/5 border-l-4 border-primary pl-3'
-                      : ''
-                  }`}
+                  onClick={() => {
+                    addToCart(
+                      activeItemForVariation.id,
+                      activeItemForVariation.name,
+                      v.price,
+                      v.name
+                    );
+                    setShowVariationModal(false);
+                    setActiveItemForVariation(null);
+                  }}
+                  className="flex justify-between items-center px-4 py-3 text-left w-full hover:bg-primary/5 transition-all duration-150"
                 >
                   <span className="text-[14px] font-medium text-text-primary sentence-case">{v.name}</span>
                   <span className="text-[14px] font-semibold text-primary font-mono">₹{v.price}</span>
@@ -1396,19 +1354,10 @@ export const POSBilling: React.FC = () => {
                 onClick={() => {
                   setShowVariationModal(false);
                   setActiveItemForVariation(null);
-                  setSelectedVariation(null);
                 }}
-                className="flex-1 h-[36px] border border-border text-text-primary rounded-btn hover:bg-bg-page text-[14px] font-medium transition-colors duration-150"
+                className="w-full h-[36px] border border-border text-text-primary rounded-btn hover:bg-bg-page text-[14px] font-medium transition-colors duration-150"
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleVariationSubmit}
-                disabled={!selectedVariation}
-                className="flex-1 h-[36px] bg-primary text-white rounded-btn hover:bg-primary-dark text-[14px] font-medium transition-colors duration-150 disabled:opacity-50"
-              >
-                Add to Cart
               </button>
             </div>
           </div>

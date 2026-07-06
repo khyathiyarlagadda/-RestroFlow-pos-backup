@@ -57,6 +57,7 @@ export const App: React.FC = () => {
       }
 
       // Check active Supabase session
+      // Check active Supabase session
       const { data: { session: supabaseSession } } = await supabase.auth.getSession();
       if (supabaseSession) {
         const profile = await storage.getUserProfile(supabaseSession.user.id);
