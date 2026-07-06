@@ -74,6 +74,7 @@ export type OrderType = 'Dine In' | 'Takeaway' | 'Delivery';
 export type PaymentMethod = 'Cash' | 'UPI' | 'Card';
 
 export interface SaleInvoice {
+  id?: string;
   tokenNo: string; // e.g. 2026-06-24-1
   dateTime: string;
   customerId: string;

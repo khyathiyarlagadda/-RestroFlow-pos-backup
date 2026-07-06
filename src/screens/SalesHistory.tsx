@@ -5,6 +5,18 @@ import type { SaleInvoice, OrderType, PaymentMethod } from '../types';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 
+const getBillNumber = (invoice: any) => {
+  if (invoice.id) {
+    const cleanId = invoice.id.replace(/[^a-zA-Z0-9]/g, '');
+    return cleanId.slice(-6).toUpperCase();
+  }
+  let hash = 0;
+  const str = invoice.tokenNo || '';
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash).toString().slice(-6).padStart(6, '0');
+};
 
 export const SalesHistory: React.FC = () => {
   const [sales, setSales] = useState<SaleInvoice[]>([]);
@@ -255,134 +267,129 @@ export const SalesHistory: React.FC = () => {
         widthClass="max-w-[420px]"
       >
         {selectedInvoice && (
-          <div className="flex flex-col gap-6">
-            
-            {/* The printable Thermal Slip representation */}
-            <div className="border border-border p-5 bg-white font-mono text-[12px] text-black shadow-card flex flex-col gap-4 rounded-btn overflow-y-auto max-h-[340px] custom-scrollbar select-text print-area">
+          <div className="flex flex-col gap-6">            {/* The printable Thermal Slip representation */}
+            <div className="border border-border p-3 bg-white font-mono text-[11px] text-black shadow-card flex flex-col gap-1 rounded-btn overflow-y-auto max-h-[340px] custom-scrollbar select-text print-area leading-tight">
               {/* Header */}
-              <div className="text-center flex flex-col gap-1">
-                <span className="text-[15px] font-bold">{settings.restaurantName}</span>
-                {settings.address && <span className="text-[11px] leading-tight">{settings.address}</span>}
-                {settings.phone && <span className="text-[11px]">Phone: {settings.phone}</span>}
-                {settings.gstEnabled && settings.gstin && <span className="text-[11px]">GSTIN: {settings.gstin}</span>}
+              <div className="text-center flex flex-col gap-0.5">
+                <span className="text-[14px] font-extrabold uppercase tracking-tight">{settings.restaurantName}</span>
+                {settings.address && <span className="text-[10px] leading-tight select-text">{settings.address}</span>}
+                {settings.phone && <span className="text-[10px] select-text">Phone: {settings.phone}</span>}
+                {settings.gstEnabled && settings.gstin && <span className="text-[10px] select-text">GSTIN: {settings.gstin}</span>}
               </div>
 
-              <div className="border-t border-dashed border-black/50" />
+              <div className="border-t border-dashed border-black my-1" />
 
-              {/* Meta */}
-              <div className="flex flex-col gap-0.5 text-[11px]">
+              {/* Customer Information */}
+              <div className="text-left select-text">
+                Customer : {selectedInvoice.customerName || 'Walk-in Customer'}
+              </div>
+
+              <div className="border-t border-dashed border-black my-1" />
+
+              {/* Order Information */}
+              <div className="flex flex-col gap-0.5 select-text">
                 <div className="flex justify-between">
-                  <span>Token Number: {(selectedInvoice.tokenNo || '').split('-').pop() || '—'}</span>
-                  <span>Date: {selectedInvoice.dateTime ? new Date(selectedInvoice.dateTime).toLocaleDateString() : '—'}</span>
+                  <span>Date : {selectedInvoice.dateTime ? new Date(selectedInvoice.dateTime).toLocaleDateString() : '—'}</span>
+                  <span>Time : {selectedInvoice.dateTime ? new Date(selectedInvoice.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '—'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Type: {selectedInvoice.orderType || '—'} {selectedInvoice.tableNo ? `(Table ${selectedInvoice.tableNo})` : ''}</span>
-                  <span>Time: {selectedInvoice.dateTime ? new Date(selectedInvoice.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                  <span>Token : {(selectedInvoice.tokenNo || '').split('-').pop() || '—'}</span>
+                  <span>Bill : {getBillNumber(selectedInvoice)}</span>
                 </div>
-                {selectedInvoice.customerName && selectedInvoice.customerName !== 'Walk-in Customer' && (
-                  <div className="text-left mt-0.5">
-                    <span>Customer: {selectedInvoice.customerName}</span>
-                  </div>
-                )}
+                <div>
+                  Cashier : {storage.getAuth()?.username || 'System'}
+                </div>
+                <div>
+                  Type : {selectedInvoice.orderType || '—'}{selectedInvoice.tableNo ? ` (Table ${selectedInvoice.tableNo})` : ''}
+                </div>
               </div>
 
-              <div className="border-t border-dashed border-black/50" />
+              <div className="border-t border-dashed border-black my-1" />
 
-              {/* Items Table */}
-              <div className="flex flex-col gap-1 text-[11px]">
-                <div className="flex justify-between font-bold">
-                  <span className="w-1/2 text-left">Item</span>
-                  <span className="w-12 text-center">Qty</span>
-                  <span className="w-16 text-right">Price</span>
-                  <span className="w-16 text-right">Total</span>
+              {/* Item Table */}
+              <div className="flex flex-col">
+                <div className="flex justify-between font-bold text-[11px] mb-1">
+                  <span className="w-[45%] text-left">Item</span>
+                  <span className="w-[15%] text-center">Qty</span>
+                  <span className="w-[20%] text-right">Price</span>
+                  <span className="w-[20%] text-right">Total</span>
                 </div>
-                <div className="border-t border-dashed border-black/30" />
-                {(selectedInvoice.items || []).map((item, itemIdx) => (
-                  <div key={item?.id || itemIdx} className="flex justify-between items-start leading-tight">
-                    <span className="w-1/2 text-left truncate sentence-case">
-                      {item?.name || 'Item'} {item?.variationName ? `(${item.variationName})` : ''}
-                    </span>
-                    <span className="w-12 text-center">{item?.quantity || 0}</span>
-                    <span className="w-16 text-right font-mono">₹{item?.price || 0}</span>
-                    <span className="w-16 text-right font-mono">₹{(item?.price || 0) * (item?.quantity || 0)}</span>
-                  </div>
-                ))}
+                <div className="border-t border-dashed border-black/40 mb-1" />
+                <div className="flex flex-col gap-0.5 select-text">
+                  {(selectedInvoice.items || []).map((item, itemIdx) => (
+                    <div key={item?.id || itemIdx} className="flex justify-between items-start leading-tight">
+                      <span className="w-[45%] text-left truncate sentence-case">
+                        {item?.name || 'Item'} {item?.variationName ? `(${item.variationName})` : ''}
+                      </span>
+                      <span className="w-[15%] text-center">{item?.quantity || 0}</span>
+                      <span className="w-[20%] text-right font-mono">₹{(item?.price || 0).toFixed(2)}</span>
+                      <span className="w-[20%] text-right font-mono">₹{((item?.price || 0) * (item?.quantity || 0)).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="border-t border-dashed border-black/50" />
+              <div className="border-t border-dashed border-black my-1" />
 
-              {/* Totals */}
-              <div className="flex flex-col gap-1 text-[11px] items-end font-mono">
-                <div className="flex justify-between w-full max-w-[200px]">
-                  <span>Subtotal:</span>
+              {/* Totals Section */}
+              <div className="flex flex-col gap-0.5 font-mono select-text">
+                <div className="flex justify-between">
+                  <span>Total Qty : {(selectedInvoice.items || []).reduce((sum, item) => sum + (item?.quantity || 0), 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
                   <span>₹{(selectedInvoice.subtotal || 0).toFixed(2)}</span>
                 </div>
                 {settings.gstEnabled && (
                   <>
-                    <div className="flex justify-between w-full max-w-[200px]">
-                      <span>CGST ({settings.cgst}%):</span>
+                    <div className="flex justify-between">
+                      <span>CGST</span>
                       <span>₹{(selectedInvoice.cgst || 0).toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between w-full max-w-[200px]">
-                      <span>SGST ({settings.sgst}%):</span>
+                    <div className="flex justify-between">
+                      <span>SGST</span>
                       <span>₹{(selectedInvoice.sgst || 0).toFixed(2)}</span>
                     </div>
                   </>
                 )}
-                {(selectedInvoice.containerCharge || 0) > 0 && (
-                  <div className="flex justify-between w-full max-w-[200px]">
-                    <span>Pkg Charge:</span>
-                    <span>₹{(selectedInvoice.containerCharge || 0).toFixed(2)}</span>
-                  </div>
-                )}
                 {(selectedInvoice.discount || 0) > 0 && (
-                  <div className="flex justify-between w-full max-w-[200px] text-danger-custom">
-                    <span>Discount:</span>
+                  <div className="flex justify-between">
+                    <span>Discount</span>
                     <span>-₹{(selectedInvoice.discount || 0).toFixed(2)}</span>
                   </div>
                 )}
-                {(selectedInvoice.tips || 0) > 0 && (
-                  <div className="flex justify-between w-full max-w-[200px]">
-                    <span>Tips:</span>
-                    <span>₹{(selectedInvoice.tips || 0).toFixed(2)}</span>
-                  </div>
-                )}
                 {selectedInvoice.roundOff !== 0 && (
-                  <div className="flex justify-between w-full max-w-[200px] italic text-text-muted">
-                    <span>Round off:</span>
+                  <div className="flex justify-between italic text-text-muted">
+                    <span>Round Off</span>
                     <span>₹{(selectedInvoice.roundOff || 0).toFixed(2)}</span>
                   </div>
                 )}
-                <div className="border-t border-black/30 w-full max-w-[200px] my-0.5" />
-                <div className="flex justify-between w-full max-w-[200px] text-[13px] font-bold">
-                  <span>Grand Total:</span>
+                <div className="border-t border-dashed border-black/40 my-1" />
+                <div className="flex justify-between text-[14px] font-extrabold text-black leading-none">
+                  <span>Grand Total</span>
                   <span>₹{(selectedInvoice.grandTotal || 0).toFixed(2)}</span>
                 </div>
               </div>
 
-              <div className="border-t border-dashed border-black/50" />
+              <div className="border-t border-dashed border-black my-1" />
 
-              {/* Payment Info */}
-              <div className="text-left text-[11px]">
-                <div>Payment Method: {selectedInvoice.paymentMethod || '—'}</div>
+              {/* Payment Section */}
+              <div className="flex flex-col gap-0.5 select-text">
+                <div>Payment : {selectedInvoice.paymentMethod || '—'}</div>
                 {selectedInvoice.paymentMethod === 'Cash' && selectedInvoice.paymentDetails?.amountTendered && (
                   <>
-                    <div>Tendered: ₹{selectedInvoice.paymentDetails.amountTendered}</div>
-                    <div>Change Returned: ₹{selectedInvoice.paymentDetails.change}</div>
+                    <div>Paid    : ₹{parseFloat(String(selectedInvoice.paymentDetails.amountTendered)).toFixed(2)}</div>
+                    <div>Change  : ₹{selectedInvoice.paymentDetails.change ? parseFloat(String(selectedInvoice.paymentDetails.change)).toFixed(2) : '0.00'}</div>
                   </>
-                )}
-                {selectedInvoice.paymentMethod === 'UPI' && selectedInvoice.paymentDetails?.upiRef && (
-                  <div>UPI Ref: {selectedInvoice.paymentDetails.upiRef}</div>
-                )}
-                {selectedInvoice.paymentMethod === 'Card' && selectedInvoice.paymentDetails?.cardLast4 && (
-                  <div>Card Ending: **** {selectedInvoice.paymentDetails.cardLast4}</div>
                 )}
               </div>
 
-              <div className="border-t border-dashed border-black/50" />
+              <div className="border-t border-dashed border-black my-1" />
 
-              <div className="text-center text-[11px] leading-tight">
-                {settings.footerMessage}
+              {/* Footer */}
+              <div className="text-center flex flex-col gap-0.5 leading-tight select-text">
+                <span>Thank You!</span>
+                <span>Visit Again.</span>
               </div>
             </div>
 

@@ -27,6 +27,18 @@ import type {
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 
+const getBillNumber = (invoice: any) => {
+  if (invoice.id) {
+    const cleanId = invoice.id.replace(/[^a-zA-Z0-9]/g, '');
+    return cleanId.slice(-6).toUpperCase();
+  }
+  let hash = 0;
+  const str = invoice.tokenNo || '';
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash).toString().slice(-6).padStart(6, '0');
+};
 
 export const POSBilling: React.FC = () => {
   // --- STATE ---
@@ -1223,135 +1235,129 @@ export const POSBilling: React.FC = () => {
               {/* The printable boundary box */}
               <div className="print-area border border-border p-5 bg-white font-mono text-[12px] text-black shadow-card flex flex-col gap-4 rounded-btn overflow-y-auto max-h-[350px] custom-scrollbar select-text">
                 
-                {/* CUSTOMER BILL LAYOUT */}
-                {(printSelection === 'customer' || printSelection === 'both') && (
-                  <div className="flex flex-col gap-4">
+                               {(printSelection === 'customer' || printSelection === 'both') && (
+                  <div className="flex flex-col gap-1 text-black font-mono text-[11px] leading-tight">
                     {/* Header */}
-                    <div className="text-center flex flex-col gap-1">
-                      <span className="text-[15px] font-bold">{settings.restaurantName}</span>
-                      {settings.address && <span className="text-[11px] leading-tight">{settings.address}</span>}
-                      {settings.phone && <span className="text-[11px]">Phone: {settings.phone}</span>}
-                      {settings.gstEnabled && settings.gstin && <span className="text-[11px]">GSTIN: {settings.gstin}</span>}
+                    <div className="text-center flex flex-col gap-0.5">
+                      <span className="text-[14px] font-extrabold uppercase tracking-tight">{settings.restaurantName}</span>
+                      {settings.address && <span className="text-[10px] leading-tight select-text">{settings.address}</span>}
+                      {settings.phone && <span className="text-[10px] select-text">Phone: {settings.phone}</span>}
+                      {settings.gstEnabled && settings.gstin && <span className="text-[10px] select-text">GSTIN: {settings.gstin}</span>}
                     </div>
 
-                    <div className="border-t border-dashed border-black/50" />
+                    <div className="border-t border-dashed border-black my-1" />
 
-                    {/* Meta */}
-                    <div className="flex flex-col gap-0.5 text-[11px]">
-                      <div className="flex justify-between">
-                        <span>Token No: {currentInvoice.tokenNo.split('-').pop()}</span>
-                        <span>Date: {new Date(currentInvoice.dateTime).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Type: {currentInvoice.orderType} {currentInvoice.tableNo ? `(Table ${currentInvoice.tableNo})` : ''}</span>
-                        <span>Time: {new Date(currentInvoice.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      {currentInvoice.customerName !== 'Walk-in Customer' && (
-                        <div className="text-left mt-0.5">
-                          <span>Customer: {currentInvoice.customerName}</span>
-                        </div>
-                      )}
+                    {/* Customer Information */}
+                    <div className="text-left select-text">
+                      Customer : {currentInvoice.customerName || 'Walk-in Customer'}
                     </div>
 
-                    <div className="border-t border-dashed border-black/50" />
+                    <div className="border-t border-dashed border-black my-1" />
 
-                    {/* Items Table */}
-                    <div className="flex flex-col gap-1 text-[11px]">
-                      <div className="flex justify-between font-bold">
-                        <span className="w-1/2 text-left">Item</span>
-                        <span className="w-12 text-center">Qty</span>
-                        <span className="w-16 text-right">Price</span>
-                        <span className="w-16 text-right">Total</span>
+                    {/* Order Information */}
+                    <div className="flex flex-col gap-0.5 select-text">
+                      <div className="flex justify-between">
+                        <span>Date : {new Date(currentInvoice.dateTime).toLocaleDateString()}</span>
+                        <span>Time : {new Date(currentInvoice.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
                       </div>
-                      <div className="border-t border-dashed border-black/30" />
-                      <div id="print-customer-items" className="flex flex-col gap-1">
+                      <div className="flex justify-between">
+                        <span>Token : {currentInvoice.tokenNo.split('-').pop()}</span>
+                        <span>Bill : {getBillNumber(currentInvoice)}</span>
+                      </div>
+                      <div>
+                        Cashier : {storage.getAuth()?.username || 'System'}
+                      </div>
+                      <div>
+                        Type : {currentInvoice.orderType}{currentInvoice.tableNo ? ` (Table ${currentInvoice.tableNo})` : ''}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-dashed border-black my-1" />
+
+                    {/* Item Table */}
+                    <div className="flex flex-col">
+                      <div className="flex justify-between font-bold text-[11px] mb-1">
+                        <span className="w-[45%] text-left">Item</span>
+                        <span className="w-[15%] text-center">Qty</span>
+                        <span className="w-[20%] text-right">Price</span>
+                        <span className="w-[20%] text-right">Total</span>
+                      </div>
+                      <div className="border-t border-dashed border-black/40 mb-1" />
+                      <div id="print-customer-items" className="flex flex-col gap-0.5 select-text">
                         {currentInvoice.items.map((item) => (
                           <div key={item.id} className="flex justify-between items-start leading-tight">
-                            <span className="w-1/2 text-left truncate sentence-case">
+                            <span className="w-[45%] text-left truncate sentence-case">
                               {item.name} {item.variationName ? `(${item.variationName})` : ''}
                             </span>
-                            <span className="w-12 text-center">{item.quantity}</span>
-                            <span className="w-16 text-right font-mono">₹{item.price}</span>
-                            <span className="w-16 text-right font-mono">₹{item.price * item.quantity}</span>
+                            <span className="w-[15%] text-center">{item.quantity}</span>
+                            <span className="w-[20%] text-right font-mono">₹{item.price.toFixed(2)}</span>
+                            <span className="w-[20%] text-right font-mono">₹{(item.price * item.quantity).toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="border-t border-dashed border-black/50" />
+                    <div className="border-t border-dashed border-black my-1" />
 
-                    {/* Tax Summary / Totals */}
-                    <div className="flex flex-col gap-1 text-[11px] items-end font-mono">
-                      <div className="flex justify-between w-full max-w-[200px]">
-                        <span>Subtotal:</span>
+                    {/* Totals Section */}
+                    <div className="flex flex-col gap-0.5 font-mono select-text">
+                      <div className="flex justify-between">
+                        <span>Total Qty : {currentInvoice.items.reduce((sum, item) => sum + item.quantity, 0)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Subtotal</span>
                         <span>₹{currentInvoice.subtotal.toFixed(2)}</span>
                       </div>
                       {settings.gstEnabled && (
                         <>
-                          <div className="flex justify-between w-full max-w-[200px]">
-                            <span>CGST ({settings.cgst}%):</span>
+                          <div className="flex justify-between">
+                            <span>CGST</span>
                             <span>₹{currentInvoice.cgst.toFixed(2)}</span>
                           </div>
-                          <div className="flex justify-between w-full max-w-[200px]">
-                            <span>SGST ({settings.sgst}%):</span>
+                          <div className="flex justify-between">
+                            <span>SGST</span>
                             <span>₹{currentInvoice.sgst.toFixed(2)}</span>
                           </div>
                         </>
                       )}
-                      {currentInvoice.containerCharge > 0 && (
-                        <div className="flex justify-between w-full max-w-[200px]">
-                          <span>Pkg Charge:</span>
-                          <span>₹{currentInvoice.containerCharge.toFixed(2)}</span>
-                        </div>
-                      )}
                       {currentInvoice.discount > 0 && (
-                        <div className="flex justify-between w-full max-w-[200px] text-danger-custom">
-                          <span>Discount:</span>
+                        <div className="flex justify-between">
+                          <span>Discount</span>
                           <span>-₹{currentInvoice.discount.toFixed(2)}</span>
                         </div>
                       )}
-                      {currentInvoice.tips > 0 && (
-                        <div className="flex justify-between w-full max-w-[200px]">
-                          <span>Tips:</span>
-                          <span>₹{currentInvoice.tips.toFixed(2)}</span>
-                        </div>
-                      )}
                       {currentInvoice.roundOff !== 0 && (
-                        <div className="flex justify-between w-full max-w-[200px] italic text-text-muted">
-                          <span>Round off:</span>
+                        <div className="flex justify-between italic text-text-muted">
+                          <span>Round Off</span>
                           <span>₹{currentInvoice.roundOff.toFixed(2)}</span>
                         </div>
                       )}
-                      <div className="border-t border-black/30 w-full max-w-[200px] my-0.5" />
-                      <div className="flex justify-between w-full max-w-[200px] text-[13px] font-bold">
-                        <span>Grand Total:</span>
+                      <div className="border-t border-dashed border-black/40 my-1" />
+                      <div className="flex justify-between text-[14px] font-extrabold text-black leading-none">
+                        <span>Grand Total</span>
                         <span>₹{currentInvoice.grandTotal.toFixed(2)}</span>
                       </div>
                     </div>
 
-                    <div className="border-t border-dashed border-black/50" />
+                    <div className="border-t border-dashed border-black my-1" />
 
-                    {/* Payment Info */}
-                    <div className="text-left text-[11px]">
-                      <div>Payment Method: {currentInvoice.paymentMethod}</div>
+                    {/* Payment Section */}
+                    <div className="flex flex-col gap-0.5 select-text">
+                      <div>Payment : {currentInvoice.paymentMethod}</div>
                       {currentInvoice.paymentMethod === 'Cash' && currentInvoice.paymentDetails?.amountTendered && (
                         <>
-                          <div>Tendered: ₹{currentInvoice.paymentDetails.amountTendered}</div>
-                          <div>Change Returned: ₹{currentInvoice.paymentDetails.change}</div>
+                          <div>Paid    : ₹{currentInvoice.paymentDetails.amountTendered.toFixed(2)}</div>
+                          <div>Change  : ₹{currentInvoice.paymentDetails.change ? currentInvoice.paymentDetails.change.toFixed(2) : '0.00'}</div>
                         </>
-                      )}
-                      {currentInvoice.paymentMethod === 'UPI' && currentInvoice.paymentDetails?.upiRef && (
-                        <div>UPI Ref: {currentInvoice.paymentDetails.upiRef}</div>
-                      )}
-                      {currentInvoice.paymentMethod === 'Card' && currentInvoice.paymentDetails?.cardLast4 && (
-                        <div>Card Ending: **** {currentInvoice.paymentDetails.cardLast4}</div>
                       )}
                     </div>
 
-                    <div className="border-t border-dashed border-black/50" />
+                    <div className="border-t border-dashed border-black my-1" />
 
-                    <div className="text-center text-[11px] leading-tight">
-                      {settings.footerMessage}
+                    {/* Footer */}
+                    <div className="text-center flex flex-col gap-0.5 leading-tight select-text">
+                      <span>Thank You!</span>
+                      <span>Visit Again.</span>
                     </div>
                   </div>
                 )}
