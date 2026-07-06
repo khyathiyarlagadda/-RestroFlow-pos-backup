@@ -89,7 +89,9 @@ export const POSBilling: React.FC = () => {
   const [selectedVariation, setSelectedVariation] = useState<Variation | null>(null);
 
   // Payment State
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(
+    (storage.getSettings().defaultPaymentMethod as PaymentMethod) || 'Cash'
+  );
 
   // Print Receipt View
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -102,7 +104,13 @@ export const POSBilling: React.FC = () => {
     setMenuItems(storage.getMenuItems().filter((item) => item.available));
     setTables(storage.getTables());
     setCustomers(storage.getCustomers());
-    setSettings(storage.getSettings());
+    const initialSettings = storage.getSettings();
+    setSettings(initialSettings);
+    if (initialSettings.defaultPaymentMethod) {
+      setPaymentMethod(initialSettings.defaultPaymentMethod as PaymentMethod);
+    } else {
+      setPaymentMethod('Cash');
+    }
 
     const handleCatsUpdate = () => {
       setCategories(storage.getCategories());
@@ -147,9 +155,194 @@ export const POSBilling: React.FC = () => {
     }
   }, [cart]);
 
+  // Keyboard shortcut listener to trigger Print Both on Enter key in reprint modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (showReceiptModal && e.key === 'Enter') {
+        e.preventDefault();
+        setPrintSelection('both');
+        console.log("PRINT ORDER (Enter Key)", currentInvoice);
+        setTimeout(() => {
+          window.print();
+        }, 50);
+      }
+    };
+
+    if (showReceiptModal) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showReceiptModal, currentInvoice]);
+
+  const renderPrintArea = (invoice: SaleInvoice) => {
+    return (
+      <div className="print-area border border-border p-3 bg-white font-mono text-[11px] text-black shadow-card flex flex-col gap-0.5 rounded-btn overflow-y-auto max-h-[300px] custom-scrollbar select-text leading-tight font-semibold">
+        {(printSelection === 'customer' || printSelection === 'both') && (
+          <div className="flex flex-col gap-0.5 text-black font-mono text-[11px] font-semibold leading-tight print:text-black">
+            {/* Header */}
+            <div className="text-center flex flex-col gap-0.2">
+              <span className="text-[14px] font-extrabold uppercase tracking-tight text-black">{settings.restaurantName}</span>
+              {settings.address && <span className="text-[10px] leading-tight select-text text-black font-semibold">{settings.address}</span>}
+              {settings.phone && <span className="text-[10px] select-text text-black font-semibold">Phone: {settings.phone}</span>}
+            </div>
+
+            <div className="border-t border-solid border-black my-0.5" />
+
+            {/* Customer Information */}
+            <div className="text-left select-text text-black font-semibold">
+              Customer : {invoice.customerName || 'Walk-in Customer'}
+            </div>
+
+            <div className="border-t border-solid border-black my-0.5" />
+
+            {/* Order Information */}
+            <div className="flex flex-col gap-0.2 select-text text-black font-semibold">
+              <div className="flex justify-between">
+                <span>Date : {new Date(invoice.dateTime).toLocaleDateString()}</span>
+                <span>Time : {new Date(invoice.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Token : {invoice.tokenNo.split('-').pop()}</span>
+                <span>Bill : {getBillNumber(invoice)}</span>
+              </div>
+              <div>
+                Cashier : {storage.getAuth()?.username || 'System'}
+              </div>
+              <div>
+                Type : {invoice.orderType}{invoice.tableNo ? ` (Table ${invoice.tableNo})` : ''}
+              </div>
+            </div>
+
+            <div className="border-t border-solid border-black my-0.5" />
+
+            {/* Item Table */}
+            <div className="flex flex-col">
+              <div className="flex justify-between font-extrabold text-[11px] mb-0.5 text-black">
+                <span className="w-[45%] text-left">Item</span>
+                <span className="w-[15%] text-center">Qty</span>
+                <span className="w-[20%] text-right">Price</span>
+                <span className="w-[20%] text-right">Total</span>
+              </div>
+              <div className="border-t border-solid border-black mb-0.5" />
+              <div id="print-customer-items" className="flex flex-col gap-0.2 select-text text-black font-semibold">
+                {invoice.items.map((item) => (
+                  <div key={item.id} className="flex justify-between items-start leading-tight">
+                    <span className="w-[45%] text-left truncate sentence-case">
+                      {item.name} {item.variationName ? `(${item.variationName})` : ''}
+                    </span>
+                    <span className="w-[15%] text-center">{item.quantity}</span>
+                    <span className="w-[20%] text-right font-mono font-semibold">₹{item.price.toFixed(2)}</span>
+                    <span className="w-[20%] text-right font-mono font-semibold">₹{(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-solid border-black my-0.5" />
+
+            {/* Totals Section */}
+            <div className="flex flex-col gap-0.2 font-mono select-text text-black font-semibold">
+              <div className="flex justify-between">
+                <span>Total Qty : {invoice.items.reduce((sum, item) => sum + item.quantity, 0)}</span>
+                <span>Subtotal : ₹{invoice.subtotal.toFixed(2)}</span>
+              </div>
+              {invoice.discount > 0 && (
+                <div className="flex justify-between text-black">
+                  <span>Discount</span>
+                  <span>-₹{invoice.discount.toFixed(2)}</span>
+                </div>
+              )}
+              {invoice.roundOff !== 0 && (
+                <div className="flex justify-between italic text-black">
+                  <span>Round Off</span>
+                  <span>₹{invoice.roundOff.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="border-t border-solid border-black my-0.5" />
+              <div className="flex justify-between text-[14px] font-extrabold text-black leading-none">
+                <span>Grand Total</span>
+                <span>₹{invoice.grandTotal.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="border-t border-solid border-black my-0.5" />
+
+            {/* Footer */}
+            <div className="text-center flex flex-col gap-0.2 leading-tight select-text text-black font-semibold">
+              <span>Thank You!</span>
+              <span>Visit Again.</span>
+            </div>
+          </div>
+        )}
+
+        {/* PAGE BREAK (Only when printing both) */}
+        {printSelection === 'both' && (
+          <div className="page-break my-4 border-t border-dashed border-black/30 print:hidden" />
+        )}
+
+        {/* KOT LAYOUT */}
+        {(printSelection === 'kot' || printSelection === 'both') && (
+          <div className="flex flex-col gap-4 text-black font-mono text-[11px] leading-tight">
+            {/* Header */}
+            <div className="text-center flex flex-col gap-1">
+              <span className="text-[14px] font-bold">KITCHEN ORDER TICKET (KOT)</span>
+              <span className="text-[16px] font-bold select-text">Token Number: {invoice.tokenNo.split('-').pop()}</span>
+            </div>
+
+            <div className="border-t border-dashed border-black/50" />
+
+            {/* Meta */}
+            <div className="flex flex-col gap-0.5 text-[11px]">
+              <div className="flex justify-between">
+                <span>Date: {new Date(invoice.dateTime).toLocaleDateString()}</span>
+                <span>Time: {new Date(invoice.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <div className="text-left">
+                <span>Type: {invoice.orderType} {invoice.tableNo ? `(Table ${invoice.tableNo})` : ''}</span>
+              </div>
+            </div>
+
+            <div className="border-t border-dashed border-black/50" />
+
+            {/* Items Table */}
+            <div className="flex flex-col gap-1 text-[11px]">
+              <div className="flex justify-between font-bold">
+                <span className="w-4/5 text-left">Item</span>
+                <span className="w-1/5 text-right">Qty</span>
+              </div>
+              <div className="border-t border-dashed border-black/30" />
+              <div id="print-kot-items" className="flex flex-col gap-1">
+                {invoice.items.map((item) => (
+                  <div key={item.id} className="flex justify-between items-start leading-tight text-[13px] font-bold">
+                    <span className="w-4/5 text-left sentence-case">
+                      {item.name} {item.variationName ? `(${item.variationName})` : ''}
+                    </span>
+                    <span className="w-1/5 text-right">{item.quantity}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-dashed border-black/50" />
+
+            {/* Total Qty */}
+            <div className="flex justify-between text-[11px] font-bold mt-1">
+              <span>Total Qty:</span>
+              <span>{invoice.items.reduce((sum, item) => sum + item.quantity, 0)}</span>
+            </div>
+
+            <div className="border-t border-dashed border-black/50" />
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Synchronized browser print trigger after DOM commit
   useEffect(() => {
-    if (triggerPrint && showReceiptModal && currentInvoice) {
+    if (triggerPrint && currentInvoice) {
       const customerItemsContainer = document.getElementById('print-customer-items');
       const kotItemsContainer = document.getElementById('print-kot-items');
 
@@ -181,7 +374,7 @@ export const POSBilling: React.FC = () => {
         return () => clearTimeout(timer);
       }
     }
-  }, [triggerPrint, showReceiptModal, currentInvoice, printSelection, refreshTrigger]);
+  }, [triggerPrint, currentInvoice, printSelection, refreshTrigger]);
 
   // Load cart from table if table selection changes (Dine In)
   useEffect(() => {
@@ -528,6 +721,7 @@ export const POSBilling: React.FC = () => {
       setContainerCharge(0);
       setCurrentTokenNo('');
       setSelectedTableId('');
+      setPaymentMethod((storage.getSettings().defaultPaymentMethod as PaymentMethod) || 'Cash');
     } else {
       // Hold take-away/delivery order
       const holdNo = storage.getNextHoldNumber();
@@ -550,6 +744,7 @@ export const POSBilling: React.FC = () => {
       setTips(0);
       setContainerCharge(0);
       setCurrentTokenNo('');
+      setPaymentMethod((storage.getSettings().defaultPaymentMethod as PaymentMethod) || 'Cash');
     }
   };
 
@@ -661,11 +856,12 @@ export const POSBilling: React.FC = () => {
     setTips(0);
     setContainerCharge(0);
     setCurrentTokenNo(''); // Reset Token Number for next order
-    setPaymentMethod(null); // Reset payment method for next order
+    setPaymentMethod((storage.getSettings().defaultPaymentMethod as PaymentMethod) || 'Cash'); // Reset payment method to configured default
 
     if (shouldPrint) {
-      setShowReceiptModal(true);
-      setTriggerPrint(true); // Trigger synchronized printing via useEffect
+      setPrintSelection('both');
+      setTriggerPrint(true); // Trigger synchronized printing in background
+      setShowReceiptModal(false); // Do NOT show preview modal automatically
     } else {
       alert(`Token Number ${tokenNo.split('-').pop()} generated successfully!`);
     }
@@ -1019,7 +1215,7 @@ export const POSBilling: React.FC = () => {
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => setPaymentMethod(paymentMethod === 'Cash' ? null : 'Cash')}
+                onClick={() => setPaymentMethod('Cash')}
                 disabled={cart.length === 0}
                 className={`h-[42px] rounded-btn border flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
                   paymentMethod === 'Cash'
@@ -1032,7 +1228,7 @@ export const POSBilling: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setPaymentMethod(paymentMethod === 'UPI' ? null : 'UPI')}
+                onClick={() => setPaymentMethod('UPI')}
                 disabled={cart.length === 0}
                 className={`h-[42px] rounded-btn border flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
                   paymentMethod === 'UPI'
@@ -1045,7 +1241,7 @@ export const POSBilling: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setPaymentMethod(paymentMethod === 'Card' ? null : 'Card')}
+                onClick={() => setPaymentMethod('Card')}
                 disabled={cart.length === 0}
                 className={`h-[42px] rounded-btn border flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
                   paymentMethod === 'Card'
@@ -1058,17 +1254,38 @@ export const POSBilling: React.FC = () => {
               </button>
             </div>
 
-            <button
-              onClick={() => handleCompletePayment(true)}
-              disabled={cart.length === 0 || !paymentMethod}
-              className={`h-[46px] rounded-btn text-[14px] font-bold transition-all duration-150 flex items-center justify-center uppercase ${
-                !paymentMethod
-                  ? 'bg-bg-page border border-border text-text-hint cursor-not-allowed'
-                  : 'bg-primary text-white hover:bg-primary-dark shadow-card'
-              }`}
-            >
-              {paymentMethod ? 'SAVE & PRINT' : 'SELECT PAYMENT METHOD'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleCompletePayment(true)}
+                disabled={cart.length === 0 || !paymentMethod}
+                className={`flex-1 h-[46px] rounded-btn text-[14px] font-bold transition-all duration-150 flex items-center justify-center uppercase ${
+                  !paymentMethod
+                    ? 'bg-bg-page border border-border text-text-hint cursor-not-allowed'
+                    : 'bg-primary text-white hover:bg-primary-dark shadow-card'
+                }`}
+              >
+                {paymentMethod ? 'SAVE & PRINT' : 'SELECT PAYMENT METHOD'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const sales = storage.getSales();
+                  const lastInvoice = currentInvoice || (sales.length > 0 ? sales[sales.length - 1] : null);
+                  if (lastInvoice) {
+                    setCurrentInvoice(lastInvoice);
+                    setPrintSelection('both');
+                    setShowReceiptModal(true);
+                  } else {
+                    alert("No invoice has been saved yet to reprint.");
+                  }
+                }}
+                className="px-2.5 h-[46px] rounded-btn border border-border bg-bg-card hover:bg-bg-page text-text-primary text-[11px] font-bold transition-all duration-150 flex flex-col items-center justify-center text-center leading-tight hover:border-primary shrink-0 w-[100px]"
+              >
+                <span>Reprint /</span>
+                <span>Print Options</span>
+              </button>
+            </div>
           </div>
 
         </div>
@@ -1200,222 +1417,58 @@ export const POSBilling: React.FC = () => {
 
 
       {/* --- RECEIPT MODAL OVERLAY (THERMAL PRINT SIMULATOR) --- */}
-      <Modal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} title="Invoice generated successfully" widthClass="max-w-[420px]">
-        {currentInvoice && (() => {
-          console.log("--- PRINT TEMPLATE DEBUG ---");
-          console.log("Receipt Modal Open:", showReceiptModal);
-          console.log("Current Invoice Object:", currentInvoice);
-          console.log("Items Array Length:", currentInvoice.items?.length);
-          if (currentInvoice.items) {
-            currentInvoice.items.forEach((item, index) => {
-              console.log(`Item [${index}]: name="${item.name}", quantity=${item.quantity}, price=${item.price}`);
-            });
-          }
-          console.log("----------------------------");
-          return (
-            <div className="flex flex-col gap-5">
-              
-              {/* Print Selection Buttons */}
-              <div className="flex border border-border rounded-btn p-1 bg-bg-page shrink-0">
-                {(['both', 'customer', 'kot'] as const).map((option) => (
-                  <button
-                    key={option}
-                    onClick={() => setPrintSelection(option)}
-                    className={`flex-1 h-[32px] rounded-btn text-[12px] font-medium transition-all duration-150 capitalize ${
-                      printSelection === option
-                        ? 'bg-primary text-white shadow-card'
-                        : 'text-text-muted hover:bg-bg-card'
-                    }`}
-                  >
-                    {option === 'both' ? 'Print Both' : option === 'customer' ? 'Customer Bill' : 'KOT Bill'}
-                  </button>
-                ))}
-              </div>
-
-              {/* The printable boundary box */}
-              <div className="print-area border border-border p-5 bg-white font-mono text-[12px] text-black shadow-card flex flex-col gap-4 rounded-btn overflow-y-auto max-h-[350px] custom-scrollbar select-text">
-                
-                {(printSelection === 'customer' || printSelection === 'both') && (
-                  <div className="flex flex-col gap-0.5 text-black font-mono text-[11px] font-semibold leading-tight print:text-black">
-                    {/* Header */}
-                    <div className="text-center flex flex-col gap-0.2">
-                      <span className="text-[14px] font-extrabold uppercase tracking-tight text-black">{settings.restaurantName}</span>
-                      {settings.address && <span className="text-[10px] leading-tight select-text text-black font-semibold">{settings.address}</span>}
-                      {settings.phone && <span className="text-[10px] select-text text-black font-semibold">Phone: {settings.phone}</span>}
-                    </div>
-
-                    <div className="border-t border-solid border-black my-0.5" />
-
-                    {/* Customer Information */}
-                    <div className="text-left select-text text-black font-semibold">
-                      Customer : {currentInvoice.customerName || 'Walk-in Customer'}
-                    </div>
-
-                    <div className="border-t border-solid border-black my-0.5" />
-
-                    {/* Order Information */}
-                    <div className="flex flex-col gap-0.2 select-text text-black font-semibold">
-                      <div className="flex justify-between">
-                        <span>Date : {new Date(currentInvoice.dateTime).toLocaleDateString()}</span>
-                        <span>Time : {new Date(currentInvoice.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Token : {currentInvoice.tokenNo.split('-').pop()}</span>
-                        <span>Bill : {getBillNumber(currentInvoice)}</span>
-                      </div>
-                      <div>
-                        Cashier : {storage.getAuth()?.username || 'System'}
-                      </div>
-                      <div>
-                        Type : {currentInvoice.orderType}{currentInvoice.tableNo ? ` (Table ${currentInvoice.tableNo})` : ''}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-solid border-black my-0.5" />
-
-                    {/* Item Table */}
-                    <div className="flex flex-col">
-                      <div className="flex justify-between font-extrabold text-[11px] mb-0.5 text-black">
-                        <span className="w-[45%] text-left">Item</span>
-                        <span className="w-[15%] text-center">Qty</span>
-                        <span className="w-[20%] text-right">Price</span>
-                        <span className="w-[20%] text-right">Total</span>
-                      </div>
-                      <div className="border-t border-solid border-black mb-0.5" />
-                      <div id="print-customer-items" className="flex flex-col gap-0.2 select-text text-black font-semibold">
-                        {currentInvoice.items.map((item) => (
-                          <div key={item.id} className="flex justify-between items-start leading-tight">
-                            <span className="w-[45%] text-left truncate sentence-case">
-                              {item.name} {item.variationName ? `(${item.variationName})` : ''}
-                            </span>
-                            <span className="w-[15%] text-center">{item.quantity}</span>
-                            <span className="w-[20%] text-right font-mono font-semibold">₹{item.price.toFixed(2)}</span>
-                            <span className="w-[20%] text-right font-mono font-semibold">₹{(item.price * item.quantity).toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-solid border-black my-0.5" />
-
-                    {/* Totals Section */}
-                    <div className="flex flex-col gap-0.2 font-mono select-text text-black font-semibold">
-                      <div className="flex justify-between">
-                        <span>Total Qty : {currentInvoice.items.reduce((sum, item) => sum + item.quantity, 0)}</span>
-                        <span>Subtotal : ₹{currentInvoice.subtotal.toFixed(2)}</span>
-                      </div>
-                      {currentInvoice.discount > 0 && (
-                        <div className="flex justify-between text-black">
-                          <span>Discount</span>
-                          <span>-₹{currentInvoice.discount.toFixed(2)}</span>
-                        </div>
-                      )}
-                      {currentInvoice.roundOff !== 0 && (
-                        <div className="flex justify-between italic text-black">
-                          <span>Round Off</span>
-                          <span>₹{currentInvoice.roundOff.toFixed(2)}</span>
-                        </div>
-                      )}
-                      <div className="border-t border-solid border-black my-0.5" />
-                      <div className="flex justify-between text-[14px] font-extrabold text-black leading-none">
-                        <span>Grand Total</span>
-                        <span>₹{currentInvoice.grandTotal.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-solid border-black my-0.5" />
-
-                    {/* Footer */}
-                    <div className="text-center flex flex-col gap-0.2 leading-tight select-text text-black font-semibold">
-                      <span>Thank You!</span>
-                      <span>Visit Again.</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* PAGE BREAK (Only when printing both) */}
-                {printSelection === 'both' && (
-                  <div className="page-break my-4 border-t border-dashed border-black/30 print:hidden" />
-                )}
-
-                {/* KOT LAYOUT */}
-                {(printSelection === 'kot' || printSelection === 'both') && (
-                  <div className="flex flex-col gap-4">
-                    {/* Header */}
-                    <div className="text-center flex flex-col gap-1">
-                      <span className="text-[14px] font-bold">KITCHEN ORDER TICKET (KOT)</span>
-                      <span className="text-[12px] font-semibold">Token No: {currentInvoice.tokenNo.split('-').pop()}</span>
-                    </div>
-
-                    <div className="border-t border-dashed border-black/50" />
-
-                    {/* Meta */}
-                    <div className="flex flex-col gap-0.5 text-[11px]">
-                      <div className="flex justify-between">
-                        <span>Date: {new Date(currentInvoice.dateTime).toLocaleDateString()}</span>
-                        <span>Time: {new Date(currentInvoice.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      <div className="text-left">
-                        <span>Type: {currentInvoice.orderType} {currentInvoice.tableNo ? `(Table ${currentInvoice.tableNo})` : ''}</span>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-dashed border-black/50" />
-
-                    {/* Items Table */}
-                    <div className="flex flex-col gap-1 text-[11px]">
-                      <div className="flex justify-between font-bold">
-                        <span className="w-4/5 text-left">Item</span>
-                        <span className="w-1/5 text-right">Qty</span>
-                      </div>
-                      <div className="border-t border-dashed border-black/30" />
-                      <div id="print-kot-items" className="flex flex-col gap-1">
-                        {currentInvoice.items.map((item) => (
-                          <div key={item.id} className="flex justify-between items-start leading-tight text-[13px] font-bold">
-                            <span className="w-4/5 text-left sentence-case">
-                              {item.name} {item.variationName ? `(${item.variationName})` : ''}
-                            </span>
-                            <span className="w-1/5 text-right">{item.quantity}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-dashed border-black/50" />
-
-                    {/* Total Qty */}
-                    <div className="flex justify-between text-[11px] font-bold mt-1">
-                      <span>Total Qty:</span>
-                      <span>{currentInvoice.items.reduce((sum, item) => sum + item.quantity, 0)}</span>
-                    </div>
-
-                    <div className="border-t border-dashed border-black/50" />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
+      <Modal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} title="Reprint / Print Options" widthClass="max-w-[420px]">
+        {currentInvoice && (
+          <div className="flex flex-col gap-5">
+            
+            {/* Print Selection Buttons */}
+            <div className="flex border border-border rounded-btn p-1 bg-bg-page shrink-0">
+              {(['both', 'customer', 'kot'] as const).map((option) => (
                 <button
-                  onClick={() => {
-                    console.log("PRINT ORDER", currentInvoice);
-                    window.print();
-                  }}
-                  className="flex-1 h-[36px] bg-primary text-white rounded-btn hover:bg-primary-dark text-[14px] font-medium transition-colors duration-150 flex items-center justify-center"
+                  key={option}
+                  onClick={() => setPrintSelection(option)}
+                  className={`flex-1 h-[32px] rounded-btn text-[12px] font-medium transition-all duration-150 capitalize ${
+                    printSelection === option
+                      ? 'bg-primary text-white shadow-card'
+                      : 'text-text-muted hover:bg-bg-card'
+                  }`}
                 >
-                  <Printer className="w-4 h-4 mr-2" /> Reprint Receipt
+                  {option === 'both' ? '✅ Print Both' : option === 'customer' ? 'Customer Bill' : 'KOT Bill'}
                 </button>
-                <button
-                  onClick={() => setShowReceiptModal(false)}
-                  className="flex-1 h-[36px] border border-border text-text-primary rounded-btn hover:bg-bg-page text-[14px] font-medium transition-colors duration-150"
-                >
-                  Done
-                </button>
-              </div>
-
+              ))}
             </div>
-          );
-        })()}
+
+            {/* Render Print Preview */}
+            {renderPrintArea(currentInvoice)}
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  console.log("PRINT ORDER", currentInvoice);
+                  window.print();
+                }}
+                className="flex-1 h-[36px] bg-primary text-white rounded-btn hover:bg-primary-dark text-[14px] font-medium transition-colors duration-150 flex items-center justify-center font-bold"
+              >
+                <Printer className="w-4 h-4 mr-2" /> Print Selection
+              </button>
+              <button
+                onClick={() => setShowReceiptModal(false)}
+                className="flex-1 h-[36px] border border-border text-text-primary rounded-btn hover:bg-bg-page text-[14px] font-medium transition-colors duration-150"
+              >
+                Done
+              </button>
+            </div>
+
+          </div>
+        )}
       </Modal>
+
+      {/* Hidden print container for automatic printing without showing popup */}
+      {currentInvoice && !showReceiptModal && (
+        <div className="hidden print:block absolute -top-[9999px] -left-[9999px] print:static print:top-0 print:left-0">
+          {renderPrintArea(currentInvoice)}
+        </div>
+      )}
 
       {/* --- MODAL: BILL SPLITTING --- */}
       <Modal isOpen={showSplitModal} onClose={() => setShowSplitModal(false)} title="Split Bill">

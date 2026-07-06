@@ -49,7 +49,8 @@ const defaultSettings: SystemSettings = {
     phoneOnReceipt: true,
     emailOnReceipt: false,
     footerOnReceipt: true
-  }
+  },
+  defaultPaymentMethod: 'Cash'
 };
 
 const defaultTables: Table[] = [
@@ -167,6 +168,7 @@ export const storage = {
 
     // 2. Populate Cache
     if (settingsRes.data) {
+      const localDefaultPay = localStorage.getItem('restroflow_default_payment_method') as any;
       cache.settings = {
         cgst: Number(settingsRes.data.cgst),
         sgst: Number(settingsRes.data.sgst),
@@ -182,7 +184,8 @@ export const storage = {
         autoPrint: settingsRes.data.auto_print,
         containerChargeEnabled: settingsRes.data.container_charge_enabled,
         defaultContainerCharge: Number(settingsRes.data.default_container_charge),
-        showFields: settingsRes.data.show_fields
+        showFields: settingsRes.data.show_fields,
+        defaultPaymentMethod: localDefaultPay || 'Cash'
       };
     } else {
       cache.settings = null;
@@ -520,12 +523,23 @@ export const storage = {
   },
 
   // Settings
-  getSettings: (): SystemSettings => cache.settings || defaultSettings,
+  getSettings: (): SystemSettings => {
+    const s = cache.settings || defaultSettings;
+    if (!s.defaultPaymentMethod) {
+      s.defaultPaymentMethod = (localStorage.getItem('restroflow_default_payment_method') as any) || 'Cash';
+    }
+    return s;
+  },
   setSettings: (settings: SystemSettings) => {
     cache.settings = settings;
     window.dispatchEvent(new CustomEvent('settingsUpdated'));
 
-    // Sync in background
+    // Save default payment method locally to avoid database schema modification
+    if (settings.defaultPaymentMethod) {
+      localStorage.setItem('restroflow_default_payment_method', settings.defaultPaymentMethod);
+    }
+
+    // Sync in background (excluding default_payment_method to prevent DB schema conflicts)
     (async () => {
       if (!cache.restaurantId) return;
       await supabase.from('system_settings').upsert({

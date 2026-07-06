@@ -144,4 +144,5 @@ export interface SystemSettings {
     emailOnReceipt: boolean;
     footerOnReceipt: boolean;
   };
+  defaultPaymentMethod?: 'Cash' | 'UPI' | 'Card';
 }

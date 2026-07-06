@@ -437,6 +437,33 @@ export const SettingsScreen: React.FC = () => {
             </div>
           </div>
 
+          {/* Billing Preferences */}
+          <div className="bg-bg-card border border-border p-6 rounded-card shadow-card flex flex-col gap-4">
+            <h3 className="text-[15px] font-medium text-text-primary border-b border-border/60 pb-2.5 sentence-case">
+              Billing Preferences
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="defaultPaymentMethod">Default Payment Method</label>
+                <select
+                  id="defaultPaymentMethod"
+                  value={settings.defaultPaymentMethod || 'Cash'}
+                  disabled={!isAdmin}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      defaultPaymentMethod: e.target.value as any
+                    }))
+                  }
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Card">Card</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           {/* Action triggers */}
           <div className="flex items-center gap-4">
             {error && (
