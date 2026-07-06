@@ -282,56 +282,45 @@ export const POSBilling: React.FC = () => {
 
         {/* KOT LAYOUT */}
         {(printSelection === 'kot' || printSelection === 'both') && (
-          <div className="flex flex-col gap-4 text-black font-mono text-[11px] leading-tight">
+          <div className="flex flex-col gap-0.5 text-black font-mono text-[11px] leading-tight print:text-black w-full">
+            
             {/* Header */}
-            <div className="text-center flex flex-col gap-1">
-              <span className="text-[14px] font-bold">KITCHEN ORDER TICKET (KOT)</span>
-              <span className="text-[16px] font-bold select-text">Token Number: {invoice.tokenNo.split('-').pop()}</span>
+            <div className="text-center font-extrabold text-[12px] uppercase py-0.5 text-black">
+              KITCHEN ORDER TICKET
             </div>
 
-            <div className="border-t border-dashed border-black/50" />
+            <div className="border-t border-solid border-black w-full my-0.5" />
 
-            {/* Meta */}
-            <div className="flex flex-col gap-0.5 text-[11px]">
-              <div className="flex justify-between">
-                <span>Date: {new Date(invoice.dateTime).toLocaleDateString()}</span>
-                <span>Time: {new Date(invoice.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-              <div className="text-left">
-                <span>Type: {invoice.orderType} {invoice.tableNo ? `(Table ${invoice.tableNo})` : ''}</span>
-              </div>
+            {/* Token & DateTime */}
+            <div className="flex flex-col gap-0.2 select-text text-black font-extrabold text-[11px]">
+              <div>Token No: {invoice.tokenNo.split('-').pop()}</div>
+              <div>Date: {new Date(invoice.dateTime).toLocaleDateString('en-GB')}</div>
+              <div>Time: {new Date(invoice.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
             </div>
 
-            <div className="border-t border-dashed border-black/50" />
+            <div className="border-t border-solid border-black w-full my-0.5" />
+
+            {/* Table Header */}
+            <div className="flex justify-between font-extrabold text-[11px] text-black">
+              <span className="w-[85%] text-left">Item</span>
+              <span className="w-[15%] text-right">Qty</span>
+            </div>
+
+            <div className="border-t border-solid border-black w-full my-0.5" />
 
             {/* Items Table */}
-            <div className="flex flex-col gap-1 text-[11px]">
-              <div className="flex justify-between font-bold">
-                <span className="w-4/5 text-left">Item</span>
-                <span className="w-1/5 text-right">Qty</span>
-              </div>
-              <div className="border-t border-dashed border-black/30" />
-              <div id="print-kot-items" className="flex flex-col gap-1">
-                {invoice.items.map((item) => (
-                  <div key={item.id} className="flex justify-between items-start leading-tight text-[13px] font-bold">
-                    <span className="w-4/5 text-left sentence-case">
-                      {item.name} {item.variationName ? `(${item.variationName})` : ''}
-                    </span>
-                    <span className="w-1/5 text-right">{item.quantity}</span>
-                  </div>
-                ))}
-              </div>
+            <div id="print-kot-items" className="flex flex-col gap-0.2 select-text text-black font-extrabold text-[11px]">
+              {invoice.items.map((item) => (
+                <div key={item.id} className="flex justify-between items-start leading-tight">
+                  <span className="w-[85%] text-left sentence-case font-semibold">
+                    {item.name} {item.variationName ? `(${item.variationName})` : ''}
+                  </span>
+                  <span className="w-[15%] text-right font-extrabold">{item.quantity}</span>
+                </div>
+              ))}
             </div>
 
-            <div className="border-t border-dashed border-black/50" />
-
-            {/* Total Qty */}
-            <div className="flex justify-between text-[11px] font-bold mt-1">
-              <span>Total Qty:</span>
-              <span>{invoice.items.reduce((sum, item) => sum + item.quantity, 0)}</span>
-            </div>
-
-            <div className="border-t border-dashed border-black/50" />
+            <div className="border-t border-solid border-black w-full my-0.5" />
           </div>
         )}
       </div>
