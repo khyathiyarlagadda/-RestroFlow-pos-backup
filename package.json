@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
     "autoprefixer": "^10.5.1",
+    "dexie": "^4.4.4",
     "lucide-react": "^1.21.0",
     "postcss": "^8.5.15",
     "qz-tray": "^2.2.6",
@@ -28,6 +29,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "oxlint": "^1.69.0",
     "typescript": "~6.0.2",
-    "vite": "^8.1.0"
+    "vite": "^8.1.0",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

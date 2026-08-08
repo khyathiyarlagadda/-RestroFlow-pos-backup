@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { storage } from './utils/storage';
 import { supabase } from './utils/supabaseClient';
+import { networkManager } from './utils/networkManager';
+import { syncManager } from './services/syncManager';
+import { getMasterCache } from './db/indexedDB';
 import type { Session } from './types';
 import { Sidebar } from './components/Sidebar';
-
 
 // Screens
 import { Login } from './screens/Login';
@@ -56,34 +58,101 @@ export const App: React.FC = () => {
         return;
       }
 
-      // Check active Supabase session
-      // Check active Supabase session
-      const { data: { session: supabaseSession } } = await supabase.auth.getSession();
-      if (supabaseSession) {
-        const profile = await storage.getUserProfile(supabaseSession.user.id);
-        if (profile && profile.status === 'active') {
-          // Initialize local cache from Supabase
-          await storage.initializeSupabase(profile.restaurant_id);
-          
-          storage.setAuth({
-            userId: profile.id,
-            username: profile.username,
-            role: profile.role,
-            loginTime: new Date().toISOString()
-          });
-          setSession(storage.getAuth());
+      // Read persisted session immediately from localStorage or IndexedDB
+      const cachedAuth = storage.getAuth() || (await getMasterCache<Session>('auth_session'));
+      const cachedRestaurantId = storage.getRestaurantId() || localStorage.getItem('restroflow_restaurant_id');
+
+      const isOffline = typeof navigator !== 'undefined' && (!navigator.onLine || !networkManager.isOnline);
+
+      const loadLocalOfflineSession = async () => {
+        if (cachedAuth && cachedRestaurantId) {
+          console.log('Offline session restored.');
+          storage.setAuth(cachedAuth);
+          await storage.initializeSupabase(cachedRestaurantId);
+          setSession(cachedAuth);
         } else {
-          await supabase.auth.signOut();
-          storage.clearAuth();
+          console.log('No cached session found.');
+          setSession(null);
+        }
+      };
+
+      // 1. If Offline: Load immediately without ANY network calls (<100ms)
+      if (isOffline) {
+        await loadLocalOfflineSession();
+        setLoading(false);
+        return;
+      }
+
+      // 2. If Online: Fast 800ms race to check Supabase session
+      const timeoutPromise = new Promise<{ isTimeout: true }>((resolve) =>
+        setTimeout(() => resolve({ isTimeout: true }), 800)
+      );
+
+      const authCheckPromise = (async () => {
+        try {
+          const { data: { session: supabaseSession } } = await supabase.auth.getSession();
+          if (supabaseSession) {
+            const profile = await storage.getUserProfile(supabaseSession.user.id);
+            if (profile && profile.status === 'active') {
+              await storage.initializeSupabase(profile.restaurant_id);
+              const activeSession: Session = {
+                userId: profile.id,
+                username: profile.username,
+                role: profile.role,
+                loginTime: new Date().toISOString()
+              };
+              storage.setAuth(activeSession);
+              return { session: activeSession, isTimeout: false };
+            }
+          }
+          return { session: null, isTimeout: false };
+        } catch (err) {
+          console.warn('[App] Supabase online check error:', err);
+          return { session: cachedAuth, isTimeout: false };
+        }
+      })();
+
+      const result = await Promise.race([authCheckPromise, timeoutPromise]);
+
+      if ('isTimeout' in result && result.isTimeout) {
+        console.warn('[App] Online check timed out (>800ms). Restoring local session...');
+        await loadLocalOfflineSession();
+      } else {
+        const sess = (result as any).session;
+        if (sess) {
+          setSession(sess);
+          syncManager.syncPending().catch(console.error);
+        } else if (cachedAuth && cachedRestaurantId) {
+          await loadLocalOfflineSession();
+          if (networkManager.isOnline) {
+            syncManager.syncPending().catch(console.error);
+          }
+        } else {
+          console.log('No cached session found.');
+          setSession(null);
+        }
+      }
+    } catch (e) {
+      console.error('[App] Initialization error:', e);
+      const cachedAuth = storage.getAuth();
+      const cachedRestaurantId = storage.getRestaurantId() || localStorage.getItem('restroflow_restaurant_id');
+      if (cachedAuth && cachedRestaurantId) {
+        try {
+          console.log('Offline session restored.');
+          storage.setAuth(cachedAuth);
+          await storage.initializeSupabase(cachedRestaurantId);
+          setSession(cachedAuth);
+          if (networkManager.isOnline) {
+            syncManager.syncPending().catch(console.error);
+          }
+        } catch {
+          console.log('No cached session found.');
           setSession(null);
         }
       } else {
-        storage.clearAuth();
+        console.log('No cached session found.');
         setSession(null);
       }
-    } catch (e) {
-      console.error("Initialization error:", e);
-      setSession(null);
     } finally {
       setLoading(false);
     }
@@ -91,6 +160,21 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     checkInitialState();
+
+    const unsubscribe = networkManager.subscribe((isOnline) => {
+      if (isOnline) {
+        console.log('[App] Network reconnected. Triggering syncManager.syncPending()...');
+        syncManager.syncPending().catch(console.error);
+        const cachedRestaurantId = storage.getRestaurantId();
+        if (cachedRestaurantId) {
+          storage.initializeSupabase(cachedRestaurantId).catch(console.error);
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleLoginSuccess = () => {
@@ -144,7 +228,6 @@ export const App: React.FC = () => {
 
             {/* Menu items */}
             <Route path="/menu" element={<MenuManagement />} />
-
 
             {/* Inventory (Admin & Owner) */}
             <Route path="/inventory" element={<Inventory />} />

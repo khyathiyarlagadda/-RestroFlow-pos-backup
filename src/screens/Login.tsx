@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { UtensilsCrossed, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { storage } from '../utils/storage';
 import { supabase } from '../utils/supabaseClient';
+import { networkManager } from '../utils/networkManager';
 
 interface LoginProps {
   onLoginSuccess: () => void;
@@ -36,6 +37,11 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     if (!password) {
       setError('Password is required');
       setPasswordError(true);
+      return;
+    }
+
+    if (typeof navigator !== 'undefined' && (!navigator.onLine || !networkManager.isOnline)) {
+      setError('First-time login requires an internet connection.');
       return;
     }
 

@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userRole, username, onLogout }
       }`}
     >
       {/* Header Monogram / Logo */}
-      <div className="h-[60px] flex items-center border-b border-[#9E2A2A]/40 px-4 justify-center">
+      <div className="h-[52px] flex items-center border-b border-[#9E2A2A]/40 px-4 justify-center">
         {isCollapsed ? (
           <UtensilsCrossed className="w-[22px] h-[22px] text-white" />
         ) : (

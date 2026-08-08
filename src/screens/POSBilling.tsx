@@ -26,6 +26,8 @@ import type {
 } from '../types';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
+import { printReceiptIsolated, printSplitReceiptIsolated } from '../utils/printReceipt';
+import { printReceiptQZ } from '../utils/qzPrinter';
 
 const getBillNumber = (invoice: any) => {
   if (invoice.id) {
@@ -153,16 +155,27 @@ export const POSBilling: React.FC = () => {
     }
   }, [cart]);
 
+  const triggerPrintReceipt = (selection?: 'both' | 'customer' | 'kot', invoiceToPrint?: SaleInvoice | null) => {
+    const targetInvoice = invoiceToPrint || currentInvoice;
+    if (!targetInvoice) return;
+
+    const printSel = selection || printSelection;
+    if (selection) {
+      setPrintSelection(selection);
+    }
+    if (invoiceToPrint) {
+      setCurrentInvoice(invoiceToPrint);
+    }
+
+    printReceiptIsolated(targetInvoice, printSel);
+  };
+
   // Keyboard shortcut listener to trigger Print Both on Enter key in reprint modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (showReceiptModal && e.key === 'Enter') {
         e.preventDefault();
-        setPrintSelection('both');
-        console.log("PRINT ORDER (Enter Key)", currentInvoice);
-        setTimeout(() => {
-          window.print();
-        }, 50);
+        triggerPrintReceipt('both');
       }
     };
 
@@ -178,7 +191,7 @@ export const POSBilling: React.FC = () => {
     return (
       <div className="print-area border border-border p-3 bg-white font-mono text-[11px] text-black shadow-card flex flex-col gap-0.5 rounded-btn overflow-y-auto max-h-[300px] custom-scrollbar select-text leading-tight font-semibold">
         {(printSelection === 'customer' || printSelection === 'both') && (
-          <div className="flex flex-col gap-0.5 text-black font-mono text-[11px] font-semibold leading-tight print:text-black">
+          <div className="print-section flex flex-col gap-0.5 text-black font-mono text-[11px] font-semibold leading-tight print:text-black">
             {/* Header */}
             <div className="text-center flex flex-col gap-0.2">
               <span className="text-[14px] font-extrabold uppercase tracking-tight text-black">{settings.restaurantName}</span>
@@ -277,12 +290,12 @@ export const POSBilling: React.FC = () => {
 
         {/* PAGE BREAK (Only when printing both) */}
         {printSelection === 'both' && (
-          <div className="page-break my-4 border-t border-dashed border-black/30 print:hidden" />
+          <div className="page-break my-4 border-t border-dashed border-black/30" />
         )}
 
         {/* KOT LAYOUT */}
         {(printSelection === 'kot' || printSelection === 'both') && (
-          <div className="flex flex-col gap-0.5 text-black font-mono text-[11px] leading-tight print:text-black w-full">
+          <div className="print-section flex flex-col gap-0.5 text-black font-mono text-[11px] leading-tight print:text-black w-full">
             
             {/* Header */}
             <div className="text-center font-extrabold text-[12px] uppercase py-0.5 text-black">
@@ -802,8 +815,26 @@ export const POSBilling: React.FC = () => {
 
     if (shouldPrint) {
       setPrintSelection('both');
-      console.log("SYNCHRONOUS PRINT TRIGGER", newInvoice);
-      window.print();
+      printReceiptQZ(newInvoice, 'both')
+        .then((result) => {
+          if (result.success) {
+            console.log('[POSBilling] QZ Print completed successfully.');
+          } else if (result.customerPrinted && !result.kotPrinted) {
+            alert(
+              `Customer Bill printed successfully, but KOT failed to print: ${result.error}\n\nYou can retry KOT printing from Reprint Options.`
+            );
+          } else {
+            alert(
+              `Bill saved, but automatic printing is unavailable. Please start QZ Tray and retry printing.`
+            );
+          }
+        })
+        .catch((err) => {
+          console.error('[POSBilling] QZ Print error:', err);
+          alert(
+            `Bill saved, but automatic printing is unavailable. Please start QZ Tray and retry printing.`
+          );
+        });
     } else {
       alert(`Token Number ${tokenNo.split('-').pop()} generated successfully!`);
     }
@@ -1382,8 +1413,7 @@ export const POSBilling: React.FC = () => {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
-                  console.log("PRINT ORDER", currentInvoice);
-                  window.print();
+                  triggerPrintReceipt(printSelection);
                 }}
                 className="flex-1 h-[36px] bg-primary text-white rounded-btn hover:bg-primary-dark text-[14px] font-medium transition-colors duration-150 flex items-center justify-center font-bold"
               >
@@ -1401,12 +1431,7 @@ export const POSBilling: React.FC = () => {
         )}
       </Modal>
 
-      {/* Hidden print container for automatic printing without showing popup */}
-      {currentInvoice && !showReceiptModal && (
-        <div className="hidden print:block absolute -top-[9999px] -left-[9999px] print:static print:top-0 print:left-0">
-          {renderPrintArea(currentInvoice)}
-        </div>
-      )}
+      {/* Receipt Modal Overlay (Screen Thermal Preview) */}
 
       {/* --- MODAL: BILL SPLITTING --- */}
       <Modal isOpen={showSplitModal} onClose={() => setShowSplitModal(false)} title="Split Bill">
@@ -1450,48 +1475,13 @@ export const POSBilling: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                console.log("PRINT ORDER", currentInvoice);
-                window.print();
+                const tableNo = tables.find((t) => t.id === selectedTableId)?.number;
+                printSplitReceiptIsolated(grandTotal, splitMembers, orderType, tableNo);
               }}
               className="flex-1 h-[36px] bg-primary text-white rounded-btn hover:bg-primary-dark text-[14px] font-medium transition-colors duration-150"
             >
               Print Split Receipt
             </button>
-          </div>
-        </div>
-
-        {/* Hidden Print Area for Split Receipt */}
-        <div className="print-area hidden print:flex flex-col gap-4 p-5 bg-white font-mono text-[12px] text-black">
-          <div className="text-center flex flex-col gap-1">
-            <span className="text-[15px] font-bold">{settings.restaurantName}</span>
-            <span className="text-[12px] font-bold">SPLIT BILL RECEIPT</span>
-          </div>
-          <div className="border-t border-dashed border-black/50" />
-          <div className="flex flex-col gap-0.5">
-            <div>Date: {new Date().toLocaleDateString()}</div>
-            <div>Time: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-            {orderType === 'Dine In' && selectedTableId && (
-              <div>Table: {tables.find(t => t.id === selectedTableId)?.number}</div>
-            )}
-          </div>
-          <div className="border-t border-dashed border-black/50" />
-          <div className="flex flex-col gap-2 font-mono">
-            <div className="flex justify-between">
-              <span>Total Amount:</span>
-              <span>₹{grandTotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>No. of Members:</span>
-              <span>{splitMembers}</span>
-            </div>
-            <div className="border-t border-black/30 pt-1 flex justify-between font-bold text-[14px]">
-              <span>Per Person Pay:</span>
-              <span>₹{(Math.round((grandTotal / splitMembers) * 100) / 100).toFixed(2)}</span>
-            </div>
-          </div>
-          <div className="border-t border-dashed border-black/50" />
-          <div className="text-center text-[10px]">
-            Thank you! Please pay your share.
           </div>
         </div>
       </Modal>
