@@ -9,8 +9,13 @@ export interface QZPrintResult {
   error?: string;
 }
 
+export interface QZConnectionStatus {
+  connected: boolean;
+  error?: string;
+}
+
 /**
- * Checks whether QZ Tray WebSocket is connected.
+ * Checks whether QZ Tray WebSocket is currently connected.
  */
 export function isQZConnected(): boolean {
   try {
@@ -22,22 +27,47 @@ export function isQZConnected(): boolean {
 
 /**
  * Establishes WebSocket connection to local QZ Tray instance.
+ * Returns connection status object containing exact error details if connection fails.
  */
-export async function connectQZ(): Promise<boolean> {
+export async function connectQZStatus(): Promise<QZConnectionStatus> {
   if (isQZConnected()) {
-    return true;
+    return { connected: true };
   }
+
   try {
-    await qz.websocket.connect({ retries: 2, delay: 1 });
-    return isQZConnected();
+    console.log('[QZ Printer] Attempting WebSocket connection to QZ Tray...');
+    // Increased retries to 10 with 1 second delay to allow sufficient time
+    // for user interaction with desktop security permission popups on HTTPS Vercel deployments.
+    await qz.websocket.connect({ retries: 10, delay: 1, keepAlive: 60 });
+    const connected = isQZConnected();
+    if (connected) {
+      console.log('[QZ Printer] WebSocket connection established successfully.');
+      return { connected: true };
+    } else {
+      const errStr = 'Connection attempt finished but qz.websocket.isConnected() returned false.';
+      console.error(`[QZ Printer] ${errStr}`);
+      return { connected: false, error: errStr };
+    }
   } catch (err: any) {
-    console.warn('[QZ Printer] Could not connect to QZ Tray:', err?.message || err);
-    return false;
+    const rawErrorMsg = err?.message || String(err);
+    console.error('[QZ Printer] Connection error:', err);
+    return {
+      connected: false,
+      error: rawErrorMsg
+    };
   }
 }
 
 /**
- * Disconnects from QZ Tray.
+ * Convenience wrapper returning boolean status for connection checks.
+ */
+export async function connectQZ(): Promise<boolean> {
+  const status = await connectQZStatus();
+  return status.connected;
+}
+
+/**
+ * Disconnects from QZ Tray WebSocket.
  */
 export async function disconnectQZ(): Promise<void> {
   try {
@@ -53,8 +83,11 @@ export async function disconnectQZ(): Promise<void> {
  * Returns list of all installed printers discovered by QZ Tray.
  */
 export async function getPrinters(): Promise<string[]> {
-  const connected = await connectQZ();
-  if (!connected) return [];
+  const status = await connectQZStatus();
+  if (!status.connected) {
+    console.warn('[QZ Printer] Cannot discover printers: QZ Tray not connected.', status.error);
+    return [];
+  }
   try {
     const res = await qz.printers.find();
     if (Array.isArray(res)) return res;
@@ -70,15 +103,18 @@ export async function getPrinters(): Promise<string[]> {
  * Finds default system printer or first available thermal printer.
  */
 export async function getDefaultPrinter(): Promise<string | null> {
-  const connected = await connectQZ();
-  if (!connected) return null;
+  const status = await connectQZStatus();
+  if (!status.connected) {
+    console.warn('[QZ Printer] Cannot get default printer: QZ Tray not connected.', status.error);
+    return null;
+  }
   try {
     const defaultPrinter = await qz.printers.getDefault();
     if (defaultPrinter) return defaultPrinter;
     const allPrinters = await getPrinters();
     return allPrinters.length > 0 ? allPrinters[0] : null;
   } catch (err) {
-    console.warn('[QZ Printer] Error fetching default printer:', err);
+    console.warn('[QZ Printer] Error fetching default printer, checking printer list fallback:', err);
     try {
       const printers = await getPrinters();
       return printers.length > 0 ? printers[0] : null;
@@ -178,58 +214,91 @@ export async function printReceiptQZ(
   invoice: SaleInvoice,
   selection: 'both' | 'customer' | 'kot' = 'both'
 ): Promise<QZPrintResult> {
-  const connected = await connectQZ();
-  if (!connected) {
+  const connStatus = await connectQZStatus();
+  if (!connStatus.connected) {
+    const errorMsg = connStatus.error || 'QZ Tray connection unavailable.';
+    console.error('[QZ Printer] Print process stopped: connection failed:', errorMsg);
     return {
       success: false,
       customerPrinted: false,
       kotPrinted: false,
-      error: 'QZ Tray is not running. Please start QZ Tray to print.'
+      error: `QZ Tray Connection Failed: ${errorMsg}`
     };
   }
 
-  const printer = await getDefaultPrinter();
+  let printer: string | null = null;
+  try {
+    printer = await getDefaultPrinter();
+  } catch (err: any) {
+    const discoveryError = err?.message || String(err);
+    console.error('[QZ Printer] Printer discovery failed:', err);
+    return {
+      success: false,
+      customerPrinted: false,
+      kotPrinted: false,
+      error: `Printer Discovery Failed: ${discoveryError}`
+    };
+  }
+
   if (!printer) {
+    console.error('[QZ Printer] No default printer found.');
     return {
       success: false,
       customerPrinted: false,
       kotPrinted: false,
-      error: 'No default thermal printer found in QZ Tray.'
+      error: 'No default thermal printer found in QZ Tray. Please set a default printer in Windows settings.'
     };
   }
 
+  console.log(`[QZ Printer] Target printer identified: "${printer}"`);
   let customerPrinted = false;
   let kotPrinted = false;
 
-  try {
-    // JOB 1: Customer Bill
-    if (selection === 'customer' || selection === 'both') {
+  // JOB 1: Customer Bill
+  if (selection === 'customer' || selection === 'both') {
+    try {
+      console.log('[QZ Printer] Sending Job 1 (Customer Bill)...');
       const customerHTML = wrapHTMLForQZ(generateCustomerBillHTML(invoice));
       await printHTMLJob(printer, customerHTML);
       customerPrinted = true;
+      console.log('[QZ Printer] Job 1 (Customer Bill) printed successfully.');
+    } catch (err: any) {
+      const job1Err = err?.message || String(err);
+      console.error('[QZ Printer] Job 1 (Customer Bill) failed:', err);
+      return {
+        success: false,
+        customerPrinted: false,
+        kotPrinted: false,
+        error: `Customer Bill Print Job Failed: ${job1Err}`
+      };
     }
+  }
 
-    // JOB 2: KOT
-    if (selection === 'kot' || selection === 'both') {
+  // JOB 2: KOT
+  if (selection === 'kot' || selection === 'both') {
+    try {
+      console.log('[QZ Printer] Sending Job 2 (KOT)...');
       const kotHTML = wrapHTMLForQZ(generateKOTHTML(invoice));
       await printHTMLJob(printer, kotHTML);
       kotPrinted = true;
+      console.log('[QZ Printer] Job 2 (KOT) printed successfully.');
+    } catch (err: any) {
+      const job2Err = err?.message || String(err);
+      console.error('[QZ Printer] Job 2 (KOT) failed:', err);
+      return {
+        success: false,
+        customerPrinted,
+        kotPrinted: false,
+        error: customerPrinted
+          ? `Customer Bill printed, but KOT failed: ${job2Err}`
+          : `KOT Print Job Failed: ${job2Err}`
+      };
     }
-
-    return {
-      success: true,
-      customerPrinted,
-      kotPrinted
-    };
-  } catch (err: any) {
-    const errorMsg = err?.message || String(err);
-    console.error('[QZ Printer] Print error:', err);
-
-    return {
-      success: false,
-      customerPrinted,
-      kotPrinted,
-      error: errorMsg
-    };
   }
+
+  return {
+    success: true,
+    customerPrinted,
+    kotPrinted
+  };
 }

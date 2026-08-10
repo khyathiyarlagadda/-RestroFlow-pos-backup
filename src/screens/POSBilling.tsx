@@ -821,18 +821,18 @@ export const POSBilling: React.FC = () => {
             console.log('[POSBilling] QZ Print completed successfully.');
           } else if (result.customerPrinted && !result.kotPrinted) {
             alert(
-              `Customer Bill printed successfully, but KOT failed to print: ${result.error}\n\nYou can retry KOT printing from Reprint Options.`
+              `Customer Bill printed successfully, but KOT failed:\n${result.error}\n\nYou can retry KOT printing from Reprint Options.`
             );
           } else {
             alert(
-              `Bill saved, but automatic printing is unavailable. Please start QZ Tray and retry printing.`
+              `Bill saved successfully, but automatic printing failed:\n${result.error}\n\nCheck browser console for full diagnostic logs.`
             );
           }
         })
         .catch((err) => {
-          console.error('[POSBilling] QZ Print error:', err);
+          console.error('[POSBilling] QZ Print unexpected error:', err);
           alert(
-            `Bill saved, but automatic printing is unavailable. Please start QZ Tray and retry printing.`
+            `Bill saved successfully, but automatic printing error occurred:\n${err?.message || String(err)}`
           );
         });
     } else {
